@@ -28,23 +28,17 @@ export class HomePage {
       return console.warn("CameraRollLocation not available");
     const plugin = cordova.plugins.CameraRollLocation;
     const getByMomentsOptions = {
-      from: new Date('2016-09-01'),
+      from: new Date('2010-09-01'),
       to: new Date('2016-09-30')
     }
-    plugin.getByMoments(
-      getByMomentsOptions
-    , (err, resp)=>{
-      if (err) return console.error(err)
-      if (!resp.length) {
-        this.items = [JSON.stringify(getByMomentsOptions), "no photos found"]
-        return console.info("plugin resp = empty")
-      }
-
+    plugin.getByMoments(getByMomentsOptions)
+    .then( (result)=>{
       // BUG: this is not updating the view in angular2
-      this.items = resp
+      this.items = result
       console.info(`plugin getByMoments() result[0]=${ this.items[0] }`);
-    });
+    }).catch( (err)=>console.log(err) )
 
     console.info("handleClick");
   }
+
 }
