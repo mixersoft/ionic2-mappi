@@ -1,0 +1,46 @@
+<ion-header>
+  <ion-navbar>
+    <ion-title>
+      Mappi
+    </ion-title>
+  </ion-navbar>
+</ion-header>
+
+<ion-content padding>
+  <div>
+    <button ion-button color="primary"
+      *ngFor="let name of names"
+      (click)="getMap(name)"
+      >{{name}}</button>
+  </div>
+  <div>
+    <p>Google Maps visualizations</p>
+    <map-google
+        #mapCtrl
+        [center]="mapCenter"
+        [zoom]="mapZoom"
+        [viz]="xxxviz"
+        [data]="xxxdata"
+        [(sebmMarkers)]="sebmMarkers"
+        (boundsChange)="boundsChange($event)"
+        (markerClick)="markerClick($event)"
+      ></map-google>
+    <div>
+      <button ion-button color="primary"
+        (click)="showMarkers()">Markers</button>
+      <button ion-button color="primary"
+        (click)="toggleHeatmap()">Heat Map</button>
+      <button ion-button color="primary"
+        (click)="toggleClusterer()">Cluster Map</button>
+      <button ion-button color="primary"
+        (click)="showRoute()">Show Route</button>
+    </div>
+    <div id="map-panel"></div>
+    <div class="details" *ngIf="selectedDetails.length">
+      <h2>Details</h2>
+      <div class="body">
+        <pre *ngFor="let msg of selectedDetails">{{msg | json}}</pre>
+      </div>
+    </div>
+  </div>
+</ion-content>

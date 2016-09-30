@@ -1,0 +1,44 @@
+<!--
+  Generated template for the MapGoogle component.
+
+  See https://angular.io/docs/ts/latest/api/core/ComponentMetadata-class.html
+  for more info on Angular 2 Components.
+-->
+<sebm-google-map
+    #sebmGoogleMapComponent
+    *ngIf="showMap"
+    [latitude]="center?.latitude()"
+    [longitude]="center?.longitude()"
+    [zoom]="zoom"
+    [disableDefaultUI]="false"
+    [zoomControl]="true"
+    (idle)="onIdle()"
+    (zoomChange)="onChanged('zoomChange', $event)"
+    (centerChange)="onChanged('centerChange', $event)"
+    (boundsChange)="onChanged('boundsChange', $event)"
+
+    (mapClick)="mapClicked($event)">
+
+    <sebm-google-map-marker
+        *ngFor="let m of sebmMarkers; let i = index"
+        (markerClick)="clickedMarker(m.label, i)"
+        [latitude]="m.lat"
+        [longitude]="m.lng"
+        [label]="m.label"
+        [markerDraggable]="m.draggable"
+        (dragEnd)="markerDragEnd(m, $event)">
+
+      <sebm-google-map-info-window>
+        <p [innerHTML]="m.detail"></p>
+      </sebm-google-map-info-window>
+
+    </sebm-google-map-marker>
+
+    <!-- <sebm-google-map-circle [latitude]="lat + 0.3" [longitude]="lng"
+        [radius]="5000"
+        [fillColor]="'red'"
+        [circleDraggable]="true"
+        [editable]="true">
+    </sebm-google-map-circle> -->
+
+  </sebm-google-map>
