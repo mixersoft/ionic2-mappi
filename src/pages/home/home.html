@@ -5,23 +5,29 @@
 </ion-header>
 
 <ion-content padding>
-  <h2>Welcome to Ionic!</h2>
-  <p>
-    This starter project comes with simple tabs-based layout for apps
-    that are going to primarily use a Tabbed UI.
-  </p>
-  <p>
-    Take a look at the <code>src/pages/</code> directory to add or change tabs,
-    update any existing page or create new pages.
-  </p>
+  <div>
+    <h2>Google Maps</h2>
+    <sebm-google-map
+      #sebmMap
+      [latitude]="location.lat"
+      [longitude]="location.lng"
+      (idle)="mapDidComplete()"
+      >
+      <sebm-google-map-marker [latitude]="location.lat" [longitude]="location.lng"></sebm-google-map-marker>
+    </sebm-google-map>
 
-  <button ion-button color="secondary" (click)="handleClick()"> Get Photos
-  </button>
-  <button ion-button color="danger" (click)="clear()"> Clear
-  </button>
+  </div>
 
   <div>
-    <pre *ngFor="let item of items;">{{item | json }}</pre>
+    <h4>Cordova Plugin: CameraRollLocation</h4>
+    <button ion-button color="secondary" (click)="handleClick()"> Get Photos
+    </button>
+    <button ion-button color="danger" (click)="clear()"> Clear
+    </button>
+
+    <div>
+      <pre *ngFor="let item of items;">{{item | json }}</pre>
+    </div>
   </div>
 
 </ion-content>

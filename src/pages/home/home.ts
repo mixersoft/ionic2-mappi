@@ -1,19 +1,53 @@
-import { Component } from '@angular/core';
+import { Component, ElementRef, ViewChild } from '@angular/core';
+import { NavController } from 'ionic-angular';
 import _ from "lodash";
 
-import { NavController } from 'ionic-angular';
 
 
 declare var cordova: any;
+let _mapDidLoadResolver: () => void;
 
 @Component({
-  templateUrl: 'home.html'
+  templateUrl: 'home.html',
+  styles: [`
+    .sebm-google-map-container {
+       height: 300px;
+     }
+    @media only screen and (min-width: 500px) {
+      .sebm-google-map-container {
+         height: 480px;
+       }
+    }
+  `]
 })
 export class HomePage {
+
+  @ViewChild('sebmMap') map: ElementRef;
+  location:any = {
+    lat: 42.6926,
+    lng: 23.3376
+  }
   items : any[] = [];
+  mapDidLoad: any;
 
   constructor(public navCtrl: NavController) {
+    this.mapDidLoad = new Promise<void>( (resolve, reject)=>{
+      _mapDidLoadResolver = resolve;
+    });
 
+  }
+
+  ngOnInit(){
+    console.log("ngOnInit, waiting for mapDidLoad")
+    this.mapDidLoad.then( ()=>{
+      console.log("google mapDidLoad");
+      console.log(`sebmGoogleMap, keys=${_.keys(this.map)}`);
+    })
+  }
+
+  mapDidComplete() {
+    console.log("map idle, resolve mapDidLoad promise")
+    _mapDidLoadResolver();
   }
 
   clear (){
