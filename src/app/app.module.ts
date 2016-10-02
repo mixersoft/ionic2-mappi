@@ -2,7 +2,6 @@ import { NgModule } from '@angular/core';
 // import { AgmCoreModule } from 'angular2-google-maps/core/core-module';
 import { IonicApp, IonicModule } from 'ionic-angular';
 
-
 import { MyApp } from './app.component';
 // import { AboutPage } from '../pages/about/about';
 // import { ContactPage } from '../pages/contact/contact';
@@ -21,7 +20,7 @@ import { PagesModule } from '../pages/pages.module';
   ],
   imports: [
     IonicModule.forRoot(MyApp),
-    PagesModule.forRoot(),
+    PagesModule,
   ],
   bootstrap: [IonicApp],
   entryComponents: [
