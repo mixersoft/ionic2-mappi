@@ -4,7 +4,7 @@ import { NavController } from 'ionic-angular';
 import _ from "lodash";
 
 import { NameListService } from '../../shared/index';
-import { GeoJsonPoint } from "../../shared/camera-roll/location-helper";
+import { GeoJsonPoint, isGeoJson } from "../../shared/camera-roll/location-helper";
 import {
   CameraRollWithLoc as CameraRoll,
   cameraRollPhoto, mediaType, optionsFilter
@@ -47,6 +47,7 @@ export class MappiPage {
   selectedDetails: any[] = [];                // log selectedDetails of selected photos
   @ViewChild('mapCtrl') private _mapCtrl: MapGoogleComponent;
 
+  private cameraRoll : CameraRoll = new CameraRoll();
   private show : any = {
     markers: false,
     heatMap: false,
@@ -69,23 +70,31 @@ export class MappiPage {
    * Get the names OnInit
    */
   ngOnInit() {
-    this.getNames();
-    this.getMap();
+    this.names = _.keys(somewhereIn);
+    // *ngFor="let name of names" is NOT updating after getNames()
+    this.getNames()
+    .then( ()=> {
+      console.log(`getMap=${this.names}`);
+      this.getMap()
+    })
   }
 
   /**
    * Handle the nameListService observable
    */
-  getNames() {
-    this.nameListService.get()
-		     .subscribe(
-		       names => {
-             this.names = names;
-             console.warn(`Override NameListService, using keys from 'somewhereIn'`)
-             this.names = Object.keys(somewhereIn)
-           },
-		       error =>  this.errorMessage = <any>error
-		       );
+  getNames() : Promise<any> {
+    return this.nameListService.get()
+    // .subscribe(
+    .toPromise().then(
+      (names) => {
+       this.names = names;
+       console.warn(`Override NameListService, using keys from 'somewhereIn'`)
+       this.names = Object.keys(somewhereIn)
+       console.log(`getNames=${this.names}`);
+       return
+      },
+      error =>  this.errorMessage = <any>error
+    );
   }
 
   /**
@@ -113,9 +122,12 @@ export class MappiPage {
       return
 
     console.info(`HomeComponent.boundsChange filtering Photos`)
-    this.photos = this.getPhotos( value.contains , 999);
-    value.complete();
-    return;
+    this.getPhotos( value.contains , 999)
+    .then( (photos)=> {
+      this.photos = photos;
+      value.complete();
+    });
+    return
   }
 
   markerClick(uuids: string[]) {
@@ -132,25 +144,26 @@ export class MappiPage {
     if (this.show.clusterMap) this.toggleClusterer()
     if (this.show.markers) this.showMarkers([])
   }
+
   getMap(city: string = "Sofia") {
-    this.resetMap()
-    // for map
-    this.photos = this.getPhotos(city, 999);
+    this.resetMap();
+    const center = somewhereIn[city];
     this.mapCenter = undefined;
     this.mapZoom = undefined;
-    setTimeout( ()=>{
-      // force value change in Component to update Map
-      this.mapCenter = this.photos[0].location;
-      this.mapZoom = DEFAULT.zoom
-      console.log(`MappiPage city=${city}, mapZoom=${this.mapZoom}, mapCenter=${this.mapCenter.coordinates}`)
-    })
-
-    // this.showMarkers(this.photos, 10);
+    console.log(`city=${city}, center=${center}`);
+    if (center) {
+      setTimeout( ()=>{
+        // force value change in Component to update Map
+        this.mapCenter = center;
+        this.mapZoom = DEFAULT.zoom
+      })
+    }
+    return
   }
 
-  getPhotos(city: string, limit: number) : cameraRollPhoto[];
-  getPhotos(containsFn: (o:any)=>boolean , limit: number) : cameraRollPhoto[];
-  getPhotos(anchor: any, limit: number = 999) : cameraRollPhoto[] {
+  getPhotos(city: string, limit: number) : Promise<cameraRollPhoto[]>;
+  getPhotos(containsFn: (o:any)=>boolean , limit: number) : Promise<cameraRollPhoto[]>;
+  getPhotos(anchor: any, limit: number = 999) : Promise<cameraRollPhoto[]> {
     // get some photos
     let filterOptions : optionsFilter;
 
@@ -173,49 +186,52 @@ export class MappiPage {
       }
     }
 
-    let myPhotos : cameraRollPhoto[];
-    let myCameraRoll = new CameraRoll();
+    return this.cameraRoll.queryPhotos()
+    .then( (photos)=>{
 
-    myCameraRoll
-      .filterPhotos(filterOptions)
-      .sortPhotos([{
-        key: 'dateTaken',
-        descending: false
-      }])
+      this.cameraRoll
+        .filterPhotos(filterOptions)
+        .sortPhotos([{
+          key: 'dateTaken',
+          descending: false
+        }])
 
-    // myCameraRoll.groupPhotos();
-
-    myPhotos = myCameraRoll.getPhotos(limit)
-    console.warn( `CameraRoll, filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
-    myPhotos.forEach( (o)=> {
-      if (o.location) o.location = new GeoJsonPoint(o.location);
-    });
-    window['myPhotos'] = myPhotos;
-    return myPhotos as cameraRollPhoto[];
+      let myPhotos = this.cameraRoll.getPhotos(limit)
+      console.warn( `CameraRoll, filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
+      window['myPhotos'] = myPhotos;
+      return myPhotos;
+    })
   }
 
   showMarkers( photos: cameraRollPhoto[], limit: number = 10 ) {
     this.show.markers = !this.show.markers
-    photos = CameraRoll.sortPhotos(photos || this.photos);
+    if (!this.show.markers) return;
 
-    let sebmMarkers : sebmMarker[] = photos.reduce( (result, o, i) => {
-      if (!o.location) return result
+    let containsFn = this._mapCtrl.getMapContainsFn();
 
-      let m: sebmMarker = {
-        lat: o.location.latitude(),
-        lng: o.location.longitude(),
-        uuid: o.uuid,
-        detail: `${o.filename}`,
-        draggable: false
-      }
-      result.push(m);
-      return result;
-    }, [] as sebmMarker[]);
-    // update marker labels
-    sebmMarkers.forEach( (m, i)=> m.label = `${i}` );
+    this.getPhotos(containsFn, 999)
+    .then( (photos)=> {
+      this.photos = photos;
+      let sebmMarkers : sebmMarker[] = photos.reduce( (result, o, i) => {
+        if (!o.location) return result
 
-    this._mapCtrl.render(sebmMarkers, 'markers', limit);
+        let m: sebmMarker = {
+          lat: o.location.latitude(),
+          lng: o.location.longitude(),
+          uuid: o.uuid,
+          detail: `${o.filename}`,
+          draggable: false
+        }
+        result.push(m);
+        return result;
+      }, [] as sebmMarker[]);
+      // update marker labels
+      sebmMarkers.forEach( (m, i)=> m.label = `${i}` );
+
+      this._mapCtrl.render(sebmMarkers, 'markers', limit);
+    });
   }
+
   toggleHeatmap(){
     this.show.heatMap = !this.show.heatMap
     let data : cameraRollPhoto[] = this.show.heatMap ? this.photos : []

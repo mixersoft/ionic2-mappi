@@ -74,6 +74,7 @@ export interface mapContainsLoc {
 }
 
 /* external globals */
+declare var window;
 declare var MarkerClusterer: any;
 let Google : any = undefined;
 
@@ -130,8 +131,8 @@ export class MapGoogleComponent {
   private _googMap: GoogleMap;
   private _google: any;
 
-  constructor(window: Window
-    , private _markerClusterer : MarkerClustererService
+  constructor(
+    private _markerClusterer : MarkerClustererService
     , private _heatmap : HeatmapService
     , private _waypoint : WaypointService
     // , public googMaps: GoogleMapsAPIWrapper  // this getNativMap() never resolves
@@ -141,7 +142,7 @@ export class MapGoogleComponent {
       (resolve, reject) => this._readyResolver = resolve
     );
     let ready$ = Observable.fromPromise(this.ready)
-    ready$.subscribe()
+    ready$.subscribe();
   }
 
   ngOnInit() {
@@ -370,6 +371,23 @@ export class MapGoogleComponent {
   /**
    * experimental
    */
+  getMapContainsFn() : (o:any)=>boolean  {
+    if (!this._googMap) return function(){
+      return false;
+    };
+    const bounds = this._googMap.getBounds();
+    console.log(`getMapContainsFn()=${bounds}`)
+    const containsFn : (o:any)=>boolean = function(location) {
+      if (isGeoJson(location) === false) return false;
+      let latLngLiteral = {
+        'lat': location.coordinates[1],
+        'lng': location.coordinates[0]
+      }
+      let latLng = new Google.maps.LatLng(latLngLiteral);
+      return bounds.contains(latLng);
+    }
+    return containsFn;
+  }
 
   render(data: any[], viz: string, limit: number = 99 ) {
     // let google : any = (window as WindowWithGoogle).google;

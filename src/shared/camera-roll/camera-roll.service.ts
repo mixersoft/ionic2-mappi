@@ -5,6 +5,7 @@ import {cameraRoll as cameraRollAsJsonString} from "./dev-raw-camera-roll";
 import * as Location from "./location-helper";
 import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
 
+declare var window;
 
 export enum mediaType {
   Unknown, Image, Video, Audio
@@ -88,7 +89,7 @@ export function distanceBetweenLatLng (p1: any, p2:any) : number {
 
 export class CameraRollWithLoc {
 
-  protected _photos : cameraRollPhoto[];
+  protected _photos : cameraRollPhoto[] = [];
   protected _filter : optionsFilter = {};
   protected _filteredPhotos : cameraRollPhoto[];
 
@@ -177,20 +178,47 @@ export class CameraRollWithLoc {
 
   constructor (
     rawData: string = cameraRollAsJsonString
-    // , window: Window,
   ) {
-    this.setPhotos(rawData);
   }
 
-  get filter() : optionsFilter {
-    return this._filter;
+  /**
+   * get cameraRollPhoto[] from CameraRoll using Plugin,
+   * uses cached values by default, ignore with force==true
+   * @param  {any}                  interface optionsFilter
+   * @param  {boolean = false}      refresh
+   * @return {Promise<cameraRollPhoto[]>}         [description]
+   */
+  queryPhotos(options?: any, force:boolean = false) : Promise<cameraRollPhoto[]>{
+    if (this._photos.length && !options && force==false) {
+      return Promise.resolve(this._photos);
+    }
+    // ???: How do you use cordova plugins with TS?
+    // the actual plugin is not exported
+    const plugin : any = _.get( window, "cordova.plugins.CameraRollLocation");
+    let pr : Promise<cameraRollPhoto[]>;
+    if (plugin) {
+      pr = plugin['getByMoments'](options)
+    } else {
+      if (!this._photos.length) {
+        console.warn("cordova.plugins.CameraRollLocation not available, using sample data");
+        try {
+          let parsed = JSON.parse( cameraRollAsJsonString ) as cameraRollPhoto[];
+          this._photos = parsed;
+        } catch (e) {
+          console.error( "Error parsing JSON" );
+        }
+      }
+      pr = Promise.resolve(this._photos)
+    }
+    return pr.then( (photos)=>{
+      photos.forEach( (o)=> {
+        if (o.location && o.location instanceof Location.GeoJsonPoint == false ) {
+          o.location = new Location.GeoJsonPoint(o.location);
+        }
+      });
+      this._photos = photos;
+    })
   }
-
-  set filter( options : optionsFilter) {
-    this._filter = options || {};
-    // this.filterPhotos();
-  }
-
 
   /**
    * filter photos in cameraRoll
@@ -278,19 +306,19 @@ export class CameraRollWithLoc {
   }
 
   getPhotos ( limit : number = 10 ) : cameraRollPhoto[] {
-    let result = this._filteredPhotos || this._photos;
-    return result.slice(0, limit);
-  }
-
-  setPhotos( rawData : string = cameraRollAsJsonString) {
-    try {
-      let parsed = JSON.parse( rawData ) as cameraRollPhoto[];
-      this._photos = parsed;
-    } catch (e) {
-      console.error( "Error parsing JSON" );
+    let result = this._filteredPhotos || this._photos || [];
+    if (!result.length) {
+      console.warn("CameraRoll: no photos found. check query/filter");
     }
-  }
 
+    result = result.slice(0, limit);
+    result.forEach( (o)=> {
+      if (o.location instanceof Location.GeoJsonPoint == false ) {
+        o.location = new Location.GeoJsonPoint(o.location);
+      }
+    });
+    return result
+  }
 
 }
 

@@ -18,7 +18,7 @@ export function isGeoJson ( obj : any) : obj is GeoJson {
     && typeof coordinates[1] === 'number';
 }
 
-abstract class GeoJsonBase {
+export abstract class GeoJsonBase {
   protected _mathRound = round;
 
   constructor (public type: string, public coordinates: [number,number]) {}
@@ -131,14 +131,14 @@ export class CircularGpsRegion extends GpsRegion {
  * get a boundingBox by GPS coordinates from a proscribed circle
  * see: http://stackoverflow.com/questions/33232008/javascript-calcualate-the-geo-coordinate-points-of-four-corners-around-a-cente
  */
-interface GpsSides {
+export interface GpsSides {
   top: number,    // lat
   right: number,  // lon
   bottom: number, // lat
   left: number    // lon
 }
 
-interface GpsCorners {  // [NW, NE, SE, SW]
+export interface GpsCorners {  // [NW, NE, SE, SW]
   0: [number,number]
   1: [number,number]
   2: [number,number]
