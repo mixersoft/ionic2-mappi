@@ -203,9 +203,13 @@ export class MappiPage {
     })
   }
 
-  showMarkers( photos: cameraRollPhoto[], limit: number = 10 ) {
+  showMarkers( photos: cameraRollPhoto[], limit: number = 20 ) {
     this.show.markers = !this.show.markers
-    if (!this.show.markers) return;
+    if (!this.show.markers) {
+      // clear markers
+      this._mapCtrl.render([], 'markers', limit);
+      return;
+    }
 
     let containsFn = this._mapCtrl.getMapContainsFn();
 

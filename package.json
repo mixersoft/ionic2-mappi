@@ -29,6 +29,8 @@
     "typescript": "^2.0.3"
   },
   "cordovaPlugins": [
+    "https://github.com/mixersoft/cordova-plugin-camera-roll-location.git",
+    "cordova-plugin-file",
     "cordova-plugin-device",
     "cordova-plugin-console",
     "cordova-plugin-whitelist",
