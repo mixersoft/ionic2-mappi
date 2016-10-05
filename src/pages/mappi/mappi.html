@@ -36,6 +36,18 @@
         (click)="showRoute()">Show Route</button>
     </div>
     <div id="map-panel"></div>
+
+    <ion-card *ngIf="photos.length">
+      <img [src]="photos[0].src"/>
+      <ion-card-content>
+        <ion-card-title>
+          {{photos[0].filename}}
+        </ion-card-title>
+        <p> {{photos[0].uuid}} </p>
+        <p> {{photos[0].localTime}} </p>
+      </ion-card-content>
+    </ion-card>
+
     <div class="details" *ngIf="selectedDetails.length">
       <h2>Details</h2>
       <div class="body">

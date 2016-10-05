@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
-import { NavController } from 'ionic-angular';
+import { NavController, Platform } from 'ionic-angular';
 import _ from "lodash";
 
 import { NameListService } from '../../shared/index';
@@ -12,6 +12,8 @@ import {
 import { sebmMarker, mapContainsLoc, MapGoogleComponent } from "../../shared/map-google/index";
 import { ExtendedGoogleMapsAPIWrapper as GMaps } from "../../shared/map-google/extended-google-maps-api-wrapper";
 import { WaypointService } from "../../shared/map-google/waypoint.service";
+import { ImageService } from "../../shared/camera-roll/image.service";
+
 
 let somewhereIn : { [s: string]: GeoJsonPoint } = {
   Sofia : new GeoJsonPoint([23.3115812,42.6707044]),
@@ -31,7 +33,9 @@ const DEFAULT = {
 
 @Component({
   templateUrl: 'mappi.html'
-  , providers: [NameListService]
+  , providers: [
+    NameListService
+  ]
 })
 // export class HomeComponent implements OnInit {
 export class MappiPage {
@@ -64,6 +68,7 @@ export class MappiPage {
   constructor(
     public navCtrl: NavController
     , public nameListService: NameListService
+    , public imgSvc: ImageService
   ) {}
 
   /**
@@ -143,6 +148,12 @@ export class MappiPage {
     if (this.show.heatMap) this.toggleHeatmap()
     if (this.show.clusterMap) this.toggleClusterer()
     if (this.show.markers) this.showMarkers([])
+    // this._mapCtrl.showRoute() toggles route & directions panel
+    // reset details
+    // TODO: listen to reset event?
+    this.photos = [];
+    this.selectedDetails = [];
+
   }
 
   getMap(city: string = "Sofia") {
@@ -198,7 +209,11 @@ export class MappiPage {
 
       let myPhotos = this.cameraRoll.getPhotos(limit)
       console.warn( `CameraRoll, filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
-      window['myPhotos'] = myPhotos;
+      if (myPhotos[0]) {
+        this.getMap(myPhotos[0].location);
+        // hack: to show image src
+        this.imgSvc.getSrc(myPhotos[0]).then( src=>myPhotos[0]['src']=src );
+      }
       return myPhotos;
     })
   }

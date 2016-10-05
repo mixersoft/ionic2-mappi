@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { AgmCoreModule } from 'angular2-google-maps/core/core-module';
-import { IonicApp, IonicModule } from 'ionic-angular';
+import { IonicApp, IonicModule, Platform } from 'ionic-angular';
 
 
 import { MyApp } from './app.component';
@@ -10,6 +10,8 @@ import { HomePage } from '../pages/home/home';
 import { MappiPage } from '../pages/mappi/mappi';
 import { TabsPage } from '../pages/tabs/tabs';
 import { SharedModule } from '../shared/shared.module';
+
+import { ImageService, CordovaImageService } from "../shared/camera-roll/image.service";
 
 
 @NgModule({
@@ -38,6 +40,18 @@ import { SharedModule } from '../shared/shared.module';
     MappiPage,
     TabsPage
   ],
-  providers: []
+  providers: [
+    {
+      provide: ImageService
+      , deps: [Platform]
+      , useFactory: (platform: Platform)=>{
+        if (platform.is("cordova")){
+          return new CordovaImageService(platform)
+        } else {
+          return new ImageService(platform)
+        }
+      }
+    }
+  ]
 })
 export class AppModule {}
