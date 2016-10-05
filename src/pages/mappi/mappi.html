@@ -6,13 +6,16 @@
   </ion-navbar>
 </ion-header>
 
-<ion-content padding>
-  <div>
-    <button ion-button color="primary"
+<ion-content padding class="mappi-page">
+  <ion-segment class="h-scroll"
+    [(ngModel)]="selectedCity" color="primary">
+    <ion-segment-button
       *ngFor="let name of names"
-      (click)="getMap(name)"
-      >{{name}}</button>
-  </div>
+      value="{{name}}"
+      (ionSelect)="getMap(name)">
+      {{name}}
+    </ion-segment-button>
+  </ion-segment>
   <div>
     <p>Google Maps visualizations</p>
     <map-google

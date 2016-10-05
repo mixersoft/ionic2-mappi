@@ -40,6 +40,8 @@ const DEFAULT = {
 // export class HomeComponent implements OnInit {
 export class MappiPage {
 
+  // @Output() boundsChange: EventEmitter<mapContainsLoc> = new EventEmitter<mapContainsLoc>();
+
   newName: string = '';
   errorMessage: string;
   names: any[] = [];
@@ -49,6 +51,7 @@ export class MappiPage {
   sebmMarkers: sebmMarker[] = [];
   photos: cameraRollPhoto[] = [];     // photos to be mapped
   selectedDetails: any[] = [];                // log selectedDetails of selected photos
+  selectedCity: string;
   @ViewChild('mapCtrl') private _mapCtrl: MapGoogleComponent;
 
   private cameraRoll : CameraRoll = new CameraRoll();
@@ -120,9 +123,9 @@ export class MappiPage {
   boundsChange(value: mapContainsLoc): void {
     // NOTE: HeatmapService & MarkerClustererService
     // - automatically limit output to current map bounds.
-    // - does NOT respond to getPhotos(containsFn)
-    // - data changed by this._mapCtrl.render(photos)
-    //
+    // make sure this._mapCtrl.render() does not zoom or it will trigger boundsChange AGAIN 
+
+    // - BUG: <map-google> boundsChange() is not bubbling up to here
     if (this.show.heatMap || this.show.clusterMap)
       return
 
@@ -134,6 +137,26 @@ export class MappiPage {
     });
     return
   }
+  /**
+   * Hack: manually trigger boundsChange()
+   */
+  triggerBoundsChange(){
+    this._mapCtrl.waitForGoogleMaps()
+    .then(()=>{
+      // TODO: listen for mapReady event
+      // but using setTimeout for now
+      console.warn("getMap() > Manually triggerBoundsChange() in mappi.ts")
+      setTimeout( ()=>{
+        let containsFn = this._mapCtrl.getMapContainsFn();
+        // call this.boundsChange()
+        this.getPhotos(containsFn, 999)
+        .then((photos)=>{
+          console.log("this._photos updated for MappiPage.boundsChange()");
+          this.photos = photos;
+        })
+      });
+    })
+  }  
 
   markerClick(uuids: string[]) {
     let data = this.photos.filter( o => _.includes(uuids,o.uuid)  );
@@ -156,21 +179,37 @@ export class MappiPage {
 
   }
 
-  getMap(city: string = "Sofia") {
-    this.resetMap();
-    const center = somewhereIn[city];
-    this.mapCenter = undefined;
-    this.mapZoom = undefined;
-    console.log(`city=${city}, center=${center}`);
-    if (center) {
+  getMap(param: string | GeoJsonPoint = "Sofia") : void
+  {
+    if (param instanceof GeoJsonPoint) {
+      // just recenter the map, do not reset
       setTimeout( ()=>{
         // force value change in Component to update Map
-        this.mapCenter = center;
-        this.mapZoom = DEFAULT.zoom
-      })
+        this.mapCenter = param as GeoJsonPoint;
+      });
+      return
     }
-    return
+
+    this.selectedCity = undefined;
+    const city = param as string;
+    const center: GeoJsonPoint = somewhereIn[city];
+
+    if (!center) return;
+    this.selectedCity = city;
+    this.resetMap();
+    
+    console.log(`city=${city}, center=${center}`);
+    setTimeout( ()=>{
+      // force value change in Component to update Map
+      this.mapCenter = center;
+      this.mapZoom = DEFAULT.zoom
+
+      // triggers boundsChange event MANUALLY
+      this.triggerBoundsChange();
+
+    });
   }
+
 
   getPhotos(city: string, limit: number) : Promise<cameraRollPhoto[]>;
   getPhotos(containsFn: (o:any)=>boolean , limit: number) : Promise<cameraRollPhoto[]>;
@@ -196,8 +235,8 @@ export class MappiPage {
         'contains': containsFn
       }
     }
-
-    return this.cameraRoll.queryPhotos()
+    const emptyCache = false;
+    return this.cameraRoll.queryPhotos(undefined, emptyCache)
     .then( (photos)=>{
 
       this.cameraRoll
@@ -226,29 +265,26 @@ export class MappiPage {
       return;
     }
 
-    let containsFn = this._mapCtrl.getMapContainsFn();
 
-    this.getPhotos(containsFn, 999)
-    .then( (photos)=> {
-      this.photos = photos;
-      let sebmMarkers : sebmMarker[] = photos.reduce( (result, o, i) => {
-        if (!o.location) return result
+    // render markers for current value of this.photos
+    let sebmMarkers : sebmMarker[] = this.photos.reduce( (result, o, i) => {
+      if (!o.location) return result
 
-        let m: sebmMarker = {
-          lat: o.location.latitude(),
-          lng: o.location.longitude(),
-          uuid: o.uuid,
-          detail: `${o.filename}`,
-          draggable: false
-        }
-        result.push(m);
-        return result;
-      }, [] as sebmMarker[]);
-      // update marker labels
-      sebmMarkers.forEach( (m, i)=> m.label = `${i}` );
+      let m: sebmMarker = {
+        lat: o.location.latitude(),
+        lng: o.location.longitude(),
+        uuid: o.uuid,
+        detail: `${o.filename}`,
+        draggable: false
+      }
+      result.push(m);
+      return result;
+    }, [] as sebmMarker[]);
+    // update marker labels
+    sebmMarkers.forEach( (m, i)=> m.label = `${i}` );
 
-      this._mapCtrl.render(sebmMarkers, 'markers', limit);
-    });
+    this._mapCtrl.render(sebmMarkers, 'markers', limit);
+
   }
 
   toggleHeatmap(){
