@@ -9,7 +9,7 @@ import {
   CameraRollWithLoc as CameraRoll,
   cameraRollPhoto, mediaType, optionsFilter
 } from "../../shared/camera-roll/camera-roll.service";
-import { sebmMarker, mapContainsLoc, MapGoogleComponent } from "../../shared/map-google/index";
+import { sebmMarker, mapContainsFn, mapContainsLoc, MapGoogleComponent } from "../../shared/map-google/index";
 import { ExtendedGoogleMapsAPIWrapper as GMaps } from "../../shared/map-google/extended-google-maps-api-wrapper";
 import { WaypointService } from "../../shared/map-google/waypoint.service";
 import { ImageService } from "../../shared/camera-roll/image.service";
@@ -39,8 +39,6 @@ const DEFAULT = {
 })
 // export class HomeComponent implements OnInit {
 export class MappiPage {
-
-  // @Output() boundsChange: EventEmitter<mapContainsLoc> = new EventEmitter<mapContainsLoc>();
 
   newName: string = '';
   errorMessage: string;
@@ -120,43 +118,18 @@ export class MappiPage {
    * Event Handlers
    */
 
-  boundsChange(value: mapContainsLoc): void {
-    // NOTE: HeatmapService & MarkerClustererService
-    // - automatically limit output to current map bounds.
-    // make sure this._mapCtrl.render() does not zoom or it will trigger boundsChange AGAIN 
-
-    // - BUG: <map-google> boundsChange() is not bubbling up to here
-    if (this.show.heatMap || this.show.clusterMap)
-      return
-
-    console.info(`HomeComponent.boundsChange filtering Photos`)
-    this.getPhotos( value.contains , 999)
-    .then( (photos)=> {
+  mapBoundsChange(contains: mapContainsFn) {
+    this.getPhotos(contains, 999)
+    .then( photos=>{
       this.photos = photos;
-      value.complete();
-    });
-    return
-  }
-  /**
-   * Hack: manually trigger boundsChange()
-   */
-  triggerBoundsChange(){
-    this._mapCtrl.waitForGoogleMaps()
-    .then(()=>{
-      // TODO: listen for mapReady event
-      // but using setTimeout for now
-      console.warn("getMap() > Manually triggerBoundsChange() in mappi.ts")
-      setTimeout( ()=>{
-        let containsFn = this._mapCtrl.getMapContainsFn();
-        // call this.boundsChange()
-        this.getPhotos(containsFn, 999)
-        .then((photos)=>{
-          console.log("this._photos updated for MappiPage.boundsChange()");
-          this.photos = photos;
-        })
-      });
+      console.warn(`MappiPage: received mapBoundsChange(), photos=${this.photos.length}`);
+
+      // TODO: call MapGoogleComponent.render()
+      // OR, MapGoogleComponent.ngDoCheck() on this.data
+
     })
-  }  
+  }
+
 
   markerClick(uuids: string[]) {
     let data = this.photos.filter( o => _.includes(uuids,o.uuid)  );
@@ -203,10 +176,6 @@ export class MappiPage {
       // force value change in Component to update Map
       this.mapCenter = center;
       this.mapZoom = DEFAULT.zoom
-
-      // triggers boundsChange event MANUALLY
-      this.triggerBoundsChange();
-
     });
   }
 

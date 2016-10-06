@@ -73,6 +73,10 @@ export interface mapContainsLoc {
   complete: () => void
 }
 
+export interface mapContainsFn {
+  (location: GeoJsonPoint): boolean
+}
+
 /* external globals */
 declare var window;
 declare var MarkerClusterer: any;
@@ -111,9 +115,9 @@ export class MapGoogleComponent {
   @Input() zoom: number;
   @Input() sebmMarkers: sebmMarker[];
   @Output() markersChange: EventEmitter<sebmMarker[]> = new EventEmitter<sebmMarker[]>();
-  @Output() boundsChange: EventEmitter<mapContainsLoc> = new EventEmitter<mapContainsLoc>();
+  // getMapContainsFn() : (o:any)=>boolean
+  @Output() mapBoundsChange: EventEmitter<mapContainsFn> = new EventEmitter<mapContainsFn>();
   @Output() markerClick: EventEmitter<string[]> = new EventEmitter<string[]>();
-
 
   @Input() data: any[];
   @Input() viz: string;
@@ -126,7 +130,7 @@ export class MapGoogleComponent {
   lng: number = 7.815982;
 
   @ViewChild('sebmGoogleMapComponent') private sebmGoogMap: any;
-  ready: Promise<void>;
+  ready: Promise<GoogleMap>;
   private _readyResolver : any;
   private _googMap: GoogleMap;
   private _google: any;
@@ -139,8 +143,21 @@ export class MapGoogleComponent {
   ) {
     // Promise
     this.ready = new Promise<void>(
-      (resolve, reject) => this._readyResolver = resolve
-    );
+      (resolve, reject) =>{
+        console.warn("this.ready Promise code, should be called only 1 time!!!"); 
+        this._readyResolver = resolve;
+      }
+    )
+    .then( ()=> {
+      let googMapApiWrapper : GoogleMapsAPIWrapper = getPrivateMethod(this.sebmGoogMap, '_mapsWrapper');
+      // find native google.maps.Map() instance
+      return googMapApiWrapper.getNativeMap();
+    })
+    .then( (map: GoogleMap)=> {
+      return this._googMap = map;    // save ref to native map instance
+    });
+
+    // experimental
     let ready$ = Observable.fromPromise(this.ready)
     ready$.subscribe();
   }
@@ -167,26 +184,21 @@ export class MapGoogleComponent {
     this._markerClusterer.selected.unsubscribe();
   }
 
+
   /**
    * waits until google map is initialized then return window.google
    * and the google map instance
    * @return {Promise<googleMapsReady>}
    */
   waitForGoogleMaps() : Promise<googleMapsReady> {
-    return this.ready
-    .then( ()=> {
-      let googMapApiWrapper : GoogleMapsAPIWrapper = getPrivateMethod(this.sebmGoogMap, '_mapsWrapper');
-      // find native google.maps.Map() instance
-      return googMapApiWrapper.getNativeMap()
-    })
-    .then( (map: GoogleMap)=> {
-      Google = (window as WindowWithGoogle).google;
-      this._googMap = map;    // native map instance
-
-      return {
-        google: Google,
-        map: this._googMap
-      };
+    return new Promise<googleMapsReady>( (resolve, reject)=>{
+      this.ready.then( (map: GoogleMap)=> {
+        Google = (window as WindowWithGoogle).google;
+        resolve({
+          google: Google,
+          map: this._googMap
+        });
+      })      
     })
   }
 
@@ -198,24 +210,11 @@ export class MapGoogleComponent {
     return Observable.fromPromise(this.waitForGoogleMaps());
   }
 
-  getNativeMap() : Promise<GoogleMap> {
-    if (this._googMap) {
-      return Promise.resolve(this._googMap)
-    }
-    return this.waitForGoogleMaps()
-    .then( (result: googleMapsReady) => {
-      this._googMap = result.map;
-      return this._googMap;
-    })
-    .catch( (err)=>{
-      console.error("catch GoogleMapsAPIWrapper.getNativeMap()")
-      return Promise.reject(err);
-    });
-  }
+
 
   onIdle(){
     // use as mapReady event
-    this._readyResolver();
+    this._readyResolver();  // resolve this.ready, one time
   }
   onRefresh(){
     setTimeout( ()=>{
@@ -230,8 +229,7 @@ export class MapGoogleComponent {
   }
 
   setCenter(point: GeoJsonPoint) {
-    this.getNativeMap()
-    .then( (map:GoogleMap)=> {
+    this.ready.then( (map:GoogleMap)=> {
       this.sebmGoogMap.triggerResize();  // NOTE: this changes the map.bounds
       return map;
     })
@@ -256,8 +254,7 @@ export class MapGoogleComponent {
       bounds.extend(point);
       })
 
-    this.getNativeMap()
-    .then( (map:GoogleMap)=> {
+    this.ready.then( (map:GoogleMap)=> {
       this.sebmGoogMap.triggerResize();  // NOTE: this changes the map.bounds
       return map;
     })
@@ -278,34 +275,6 @@ export class MapGoogleComponent {
    * @Output methods
    */
 
-  /**
-   * handle map updates from boundsChanged
-   * @type {Boolean}
-   */
-  private boundsChangedComplete = true;
-  private debounceBoundsChanged : any = _.debounce(
-    (bounds: LatLngBounds) => {
-      let result: mapContainsLoc = {
-        contains: (location) => {
-          if (isGeoJson(location) === false) return false;
-          let latLngLiteral = {
-            'lat': location.coordinates[1],
-            'lng': location.coordinates[0]
-          }
-          let latLng = new Google.maps.LatLng(latLngLiteral);
-          return bounds.contains(latLng);
-        },
-        complete: () => {
-          console.warn('RESUME after filterPhotos() COMPLETE')
-        }
-      }
-      this.boundsChange.emit(result); // bubble up to HomeComponent.boundsChange
-      return;
-    }
-    , 2*1000
-    // , { leading: true, trailing: false }
-    );
-
   onClusterClick(cluster: any){
     // console.log(cluster);
     const uuids : string[] = cluster.markers_.map( (m:any) => m['uuid']);
@@ -313,20 +282,25 @@ export class MapGoogleComponent {
   }
 
   onChanged(label: string, value:any){
+    
     switch (label) {
       case 'centerChange': value = [value.lat, value.lng]; break;
       case 'boundsChange':
         // bubble up
-        if (Google) {
-          let latLngBounds = value as LatLngBounds;
-          // guard against toggle Off
-          const toggleOn = this._heatmap.isVisible;
-          if (toggleOn) this.debounceBoundsChanged(latLngBounds);
-        }
+        this.waitForGoogleMaps()
+        .then( ()=>{
+          this.debouncedTriggerMapBoundsChanged(value);
+        })
         break;
     }
     console.log(`${label}=${value}, zoom=${this.sebmGoogMap.zoom}`)
   }
+  
+  // triggerMapBoundsChanged = 
+  debouncedTriggerMapBoundsChanged = _.debounce( (bounds: LatLngBounds)=>{
+    this.mapBoundsChange.emit(this.getMapContainsFn( bounds ));
+    // TODO: listen to ngOnChanges this.photos and update accordingly
+  }, 500);
 
 
   clickedMarker(label: string, index: number) {
@@ -371,19 +345,19 @@ export class MapGoogleComponent {
   /**
    * experimental
    */
-  getMapContainsFn() : (o:any)=>boolean  {
+  getMapContainsFn(bounds: LatLngBounds) : mapContainsFn {
     if (!this._googMap) return function(){
       return false;
     };
-    const bounds = this._googMap.getBounds();
-    console.log(`getMapContainsFn()=${bounds}`)
-    const containsFn : (o:any)=>boolean = function(location) {
-      if (isGeoJson(location) === false) return false;
-      let latLngLiteral = {
+    if (!bounds) bounds = this._googMap.getBounds();
+    // console.log(`getMapContainsFn()=${bounds}`)
+    const containsFn : mapContainsFn = function(location: GeoJsonPoint) {
+      if (!location) return false;
+      const latLngLiteral = {
         'lat': location.coordinates[1],
         'lng': location.coordinates[0]
       }
-      let latLng = new Google.maps.LatLng(latLngLiteral);
+      const latLng = new Google.maps.LatLng(latLngLiteral);
       return bounds.contains(latLng);
     }
     return containsFn;
@@ -582,7 +556,7 @@ export class MapGoogleComponent {
       waypointsOpt = this.getRouteOptsFromPhotos(photos);
     }
 
-    window['sm'] = this.sebmMarkers;
+    // window['sm'] = this.sebmMarkers;
     this.sebmMarkers = this.sebmMarkers || [];
 
     const getLabel = function(i:number, content: string) : string {
