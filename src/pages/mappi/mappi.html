@@ -50,12 +50,5 @@
         <p> {{photos[0].localTime}} </p>
       </ion-card-content>
     </ion-card>
-
-    <div class="details" *ngIf="selectedDetails.length">
-      <h2>Details</h2>
-      <div class="body">
-        <pre *ngFor="let msg of selectedDetails">{{msg | json}}</pre>
-      </div>
-    </div>
   </div>
 </ion-content>

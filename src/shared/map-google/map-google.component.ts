@@ -496,11 +496,9 @@ export class MapGoogleComponent {
 
   _routeOnComplete(result:any, clusters:jmcCluster[], photos: cameraRollPhoto[]) : void {
     let gdResult = new GoogleDirectionsResult(result);
-    console.log(gdResult.getPOIs());
-    // hack: display directions as list
-    const dirDisplay:any = (this._googMap as any)['_directionsDisplay'];
-    dirDisplay.setPanel( document.getElementById('map-panel') );
-    dirDisplay.setDirections( gdResult.getResult() );
+    // console.log(gdResult.getPOIs());
+    WaypointService.displayRoute( gdResult.getResult(), 'map-panel' );
+    
 
     let byLatLng = GoogleDirectionsResult.zipPOIsByLocation(
       gdResult,
@@ -515,11 +513,13 @@ export class MapGoogleComponent {
     console.log(byLatLng);
   }
 
-  showRoute(photos?: cameraRollPhoto[]){
+  /**
+   * @return boolean, isRouteVisible
+   */
+  showRoute(photos?: cameraRollPhoto[]) : boolean{
     if (WaypointService.isVisible(this._googMap)) {
-      // toggle routes
       WaypointService.clearRoutes(this._googMap);
-      return
+      return false;
     }
 
     // get directions for before/after locations
@@ -536,7 +536,7 @@ export class MapGoogleComponent {
         waypointsOpt,
         (err, result) => this._routeOnComplete(result, clusters, photos)
       );
-      return
+      return true
     }
 
     // use photos
@@ -573,10 +573,14 @@ export class MapGoogleComponent {
       waypointsOpt
       , this._googMap
       , this.sebmMarkers
-      , undefined   // 'onComplete'
+      , (err, result)=>{
+        let gdResult = new GoogleDirectionsResult(result);
+        WaypointService.displayRoute( gdResult.getResult(), 'map-panel' );
+      }
       , getLabel
     );
     // this._waypoint.getRoute( waypointsOpt, this.sebmMarkers );
+    return true;
   }
 
 }

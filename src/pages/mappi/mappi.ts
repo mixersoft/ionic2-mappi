@@ -253,7 +253,7 @@ export class MappiPage {
       return result;
     }, [] as sebmMarker[]);
     // update marker labels
-    sebmMarkers.forEach( (m, i)=> m.label = `${i}` );
+    sebmMarkers.forEach( (m, i)=> m.label = String.fromCharCode(97 + i) );
 
     this._mapCtrl.render(sebmMarkers, 'markers', limit);
 

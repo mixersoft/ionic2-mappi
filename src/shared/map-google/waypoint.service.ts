@@ -44,11 +44,22 @@ export class WaypointService {
     return directionsDisplay && !!directionsDisplay.getMap();
   }
 
+  static displayRoute(response: any, panelId?: string, directionsDisplay?: any) {
+    if (!directionsDisplay) directionsDisplay = WaypointService.instance.renderer;
+    directionsDisplay.setDirections(response);
+    if (panelId && !directionsDisplay.panel) {
+      directionsDisplay.setPanel( document.getElementById(panelId) );
+    }
+  }
+
   static clearRoutes(
     map? : GoogleMap
   ) {
     let directionsDisplay = map['_directionsDisplay'] || WaypointService.instance.renderer
-    directionsDisplay && directionsDisplay.setMap(null);
+    if (directionsDisplay) {
+      directionsDisplay.setMap(null);
+      directionsDisplay.setPanel(null);
+    }
   }
   /**
    * [calculateAndDisplayRoute description]
