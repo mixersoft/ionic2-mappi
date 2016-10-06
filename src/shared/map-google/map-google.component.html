@@ -16,19 +16,21 @@
     (zoomChange)="onChanged('zoomChange', $event)"
     (centerChange)="onChanged('centerChange', $event)"
     (boundsChange)="onChanged('boundsChange', $event)"
-
-    (mapClick)="mapClicked($event)">
+    >
 
     <sebm-google-map-marker
         *ngFor="let m of sebmMarkers; let i = index"
-        (markerClick)="clickedMarker(m.label, i)"
+        (markerClick)="clickedMarker(m, i)"
         [latitude]="m.lat"
         [longitude]="m.lng"
         [label]="m.label"
         [markerDraggable]="m.draggable"
+        [openInfoWindow]="false"
         (dragEnd)="markerDragEnd(m, $event)">
 
-      <sebm-google-map-info-window>
+      <sebm-google-map-info-window 
+        [disableAutoPan]="true"
+        [isOpen]="m.isOpen">
         <p [innerHTML]="m.detail"></p>
       </sebm-google-map-info-window>
 

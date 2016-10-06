@@ -3,7 +3,7 @@ import _ from "lodash";
 import { Observable } from 'rxjs/Observable';
 import 'rxjs/Rx';
 
-// import { SebmGoogleMap, SebmGoogleMapMarker, SebmGoogleMapInfoWindow } from 'angular2-google-maps/core';
+// import { SebmGoogleMap, SebmGoogleMapMarker, SebmGoogleMapInfoWindow } from 'angular2-google-maps/core/directives';
 import { GoogleMapsAPIWrapper } from 'angular2-google-maps/core/services'
 import { GoogleMap, LatLng, LatLngBounds, Marker, MouseEvent } from 'angular2-google-maps/core/services/google-maps-types'
 
@@ -130,6 +130,7 @@ export class MapGoogleComponent {
   lng: number = 7.815982;
 
   @ViewChild('sebmGoogleMapComponent') private sebmGoogMap: any;
+
   ready: Promise<GoogleMap>;
   private _readyResolver : any;
   private _googMap: GoogleMap;
@@ -303,13 +304,16 @@ export class MapGoogleComponent {
   }, 500);
 
 
-  clickedMarker(label: string, index: number) {
-    console.log(`clicked the marker: ${label || index}`)
+  private _lastOpenIndex: number = -1;
+  clickedMarker( data: any, index: number) {
+    data['isOpen'] = true;
+    if (this._lastOpenIndex > -1) this.sebmMarkers[this._lastOpenIndex]['isOpen'] = false;
+    this._lastOpenIndex = index;
+
     // bubble up
     const uuid = this.sebmMarkers[index].uuid;
     this.markerClick.emit( [uuid] );
-
-
+    console.log(`clicked the marker: ${data.detail}`)
   }
 
   mapClicked($event: any) {

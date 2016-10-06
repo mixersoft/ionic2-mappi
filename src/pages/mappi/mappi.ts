@@ -48,7 +48,7 @@ export class MappiPage {
   mapZoom: number = DEFAULT.zoom;
   sebmMarkers: sebmMarker[] = [];
   photos: cameraRollPhoto[] = [];     // photos to be mapped
-  selectedDetails: any[] = [];                // log selectedDetails of selected photos
+  selected: cameraRollPhoto;
   selectedCity: string;
   @ViewChild('mapCtrl') private _mapCtrl: MapGoogleComponent;
 
@@ -132,9 +132,12 @@ export class MappiPage {
 
 
   markerClick(uuids: string[]) {
-    let data = this.photos.filter( o => _.includes(uuids,o.uuid)  );
+    let data = this.photos.filter( o => _.includes(uuids, o.uuid)  );
     data = _.sortBy(data, 'localTime');
-    this.selectedDetails = _.map(data, o => _.pick(o, ['filename', 'localTime']));
+    this.selected = data[0];
+    // TODO: move both to ngOnChanges()??
+    this.imgSvc.getSrc(this.selected).then( src=>this.selected['src']=src );
+    console.log(`markerClick, uuid=${this.selected.uuid}`)
   }
 
   /**
@@ -148,7 +151,6 @@ export class MappiPage {
     // reset details
     // TODO: listen to reset event?
     this.photos = [];
-    this.selectedDetails = [];
 
   }
 
@@ -218,9 +220,10 @@ export class MappiPage {
       let myPhotos = this.cameraRoll.getPhotos(limit)
       console.warn( `CameraRoll, filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
       if (myPhotos[0]) {
-        this.getMap(myPhotos[0].location);
+        this.selected = myPhotos[0];
+        this.getMap(this.selected.location);
         // hack: to show image src
-        this.imgSvc.getSrc(myPhotos[0]).then( src=>myPhotos[0]['src']=src );
+        this.imgSvc.getSrc(this.selected).then( src=>this.selected['src']=src );
       }
       return myPhotos;
     })
