@@ -10,10 +10,10 @@
   <ion-segment class="h-scroll"
     [(ngModel)]="selectedCity" color="primary">
     <ion-segment-button
-      *ngFor="let name of names"
-      value="{{name}}"
-      (ionSelect)="getMap(name)">
-      {{name}}
+      *ngFor="let place of destinations"
+      value="{{place.label}}"
+      (ionSelect)="getMap(place, true)">
+      {{place.label}}
     </ion-segment-button>
   </ion-segment>
   <div>

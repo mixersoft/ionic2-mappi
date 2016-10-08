@@ -1,9 +1,13 @@
-import { Component, OnInit, ViewChild } from '@angular/core';
+import { Component, EventEmitter, 
+  OnInit, AfterViewInit, OnChanges, SimpleChanges,
+  Input, Output,
+  ViewChild 
+} from '@angular/core';
 import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
 import { NavController, Platform } from 'ionic-angular';
 import _ from "lodash";
 
-import { NameListService } from '../../shared/index';
+
 import { GeoJsonPoint, isGeoJson } from "../../shared/camera-roll/location-helper";
 import {
   CameraRollWithLoc as CameraRoll,
@@ -13,19 +17,8 @@ import { sebmMarker, mapContainsFn, mapContainsLoc, MapGoogleComponent } from ".
 import { ExtendedGoogleMapsAPIWrapper as GMaps } from "../../shared/map-google/extended-google-maps-api-wrapper";
 import { WaypointService } from "../../shared/map-google/waypoint.service";
 import { ImageService } from "../../shared/camera-roll/image.service";
-
-
-let somewhereIn : { [s: string]: GeoJsonPoint } = {
-  Sofia : new GeoJsonPoint([23.3115812,42.6707044]),
-  Napoli: new GeoJsonPoint([14.2503289,40.8426699]),
-  Barcelona : new GeoJsonPoint([2.1721116, 41.3830168]),
-  Bilbao : new GeoJsonPoint([-2.9266,43.2631916666667]),
-  Brighton : new GeoJsonPoint([-0.1412948,50.8374692]),
-  Matera: new GeoJsonPoint([16.6116033333333, 40.66402]),
-  'Rila Lakes' : new GeoJsonPoint([23.32,42.2027774]),
-  Rome: new GeoJsonPoint([12.4718966666667, 41.8992366666667]),
-  Rovinj : new GeoJsonPoint([13.6004858, 45.0738559])
-};
+// mocks
+import { DestinationService } from "../../mocks/mock-destinations"
 
 const DEFAULT = {
   zoom: 14
@@ -33,22 +26,19 @@ const DEFAULT = {
 
 @Component({
   templateUrl: 'mappi.html'
-  , providers: [
-    NameListService
-  ]
+  , providers: [ DestinationService ]
 })
 // export class HomeComponent implements OnInit {
 export class MappiPage {
 
-  newName: string = '';
   errorMessage: string;
-  names: any[] = [];
 
   mapCenter: GeoJsonPoint;
   mapZoom: number = DEFAULT.zoom;
   sebmMarkers: sebmMarker[] = [];
   photos: cameraRollPhoto[] = [];     // photos to be mapped
   selected: cameraRollPhoto;
+  destinations: {label:string,location:GeoJsonPoint}[];
   selectedCity: string;
   @ViewChild('mapCtrl') private _mapCtrl: MapGoogleComponent;
 
@@ -61,14 +51,11 @@ export class MappiPage {
   }
 
   /**
-   * Creates an instance of the MappiPage with the injected
-   * NameListService.
-   *
-   * @param {NameListService} nameListService - The injected NameListService.
+   * Constructor
    */
   constructor(
     public navCtrl: NavController
-    , public nameListService: NameListService
+    , public destinationSvc: DestinationService
     , public imgSvc: ImageService
   ) {}
 
@@ -76,43 +63,24 @@ export class MappiPage {
    * Get the names OnInit
    */
   ngOnInit() {
-    this.names = _.keys(somewhereIn);
-    // *ngFor="let name of names" is NOT updating after getNames()
-    this.getNames()
-    .then( ()=> {
-      console.log(`getMap=${this.names}`);
-      this.getMap()
-    })
+    this.destinationSvc.get()
+    .subscribe(
+      results => {
+        this.destinations = results;
+        const initialLocation = _.find(this.destinations, {label:'Sofia'}); 
+        this.getMap( initialLocation, true)
+      }      
+    )
   }
 
-  /**
-   * Handle the nameListService observable
-   */
-  getNames() : Promise<any> {
-    return this.nameListService.get()
-    // .subscribe(
-    .toPromise().then(
-      (names) => {
-       this.names = names;
-       console.warn(`Override NameListService, using keys from 'somewhereIn'`)
-       this.names = Object.keys(somewhereIn)
-       console.log(`getNames=${this.names}`);
-       return
-      },
-      error =>  this.errorMessage = <any>error
-    );
+  ngAfterViewInit(){
+    console.warn(`>>> ngAfterViewInit, names=${this.destinations}`)
   }
 
-  /**
-   * Pushes a new name onto the names array
-   * @return {boolean} false to prevent default form submit behavior to refresh the page.
-   */
-  addName(): boolean {
-    // TODO: implement nameListService.post
-    this.names.push(this.newName);
-    this.newName = '';
-    return false;
+  ngOnChanges(changes: SimpleChanges) : void {
+    // changes.prop contains the old and the new value...
   }
+
 
   /**
    * Event Handlers
@@ -154,26 +122,25 @@ export class MappiPage {
 
   }
 
-  getMap(param: string | GeoJsonPoint = "Sofia") : void
+  getMap(arg: {location:GeoJsonPoint} | GeoJsonPoint, resetMap:boolean = false) : void
   {
-    if (param instanceof GeoJsonPoint) {
+    const center = arg instanceof GeoJsonPoint ? arg : arg.location;
+    if (resetMap == false) {
       // just recenter the map, do not reset
       setTimeout( ()=>{
         // force value change in Component to update Map
-        this.mapCenter = param as GeoJsonPoint;
+        this.mapCenter = center as GeoJsonPoint;
       });
       return
     }
 
-    this.selectedCity = undefined;
-    const city = param as string;
-    const center: GeoJsonPoint = somewhereIn[city];
+    this.resetMap()
+    // this.selectedCity used by <ion-segment>
+    this.selectedCity = arg.hasOwnProperty('label') 
+      ? arg['label'] 
+      : (_.find(this.destinations, (o)=>o.location == center) || {})['label']
 
-    if (!center) return;
-    this.selectedCity = city;
-    this.resetMap();
-    
-    console.log(`city=${city}, center=${center}`);
+    console.log(`city=${this.selectedCity}, center=${center}`);
     setTimeout( ()=>{
       // force value change in Component to update Map
       this.mapCenter = center;
@@ -181,7 +148,9 @@ export class MappiPage {
     });
   }
 
-
+  /**
+   * called by mapBoundsChange()
+   */
   getPhotos(city: string, limit: number) : Promise<cameraRollPhoto[]>;
   getPhotos(containsFn: (o:any)=>boolean , limit: number) : Promise<cameraRollPhoto[]>;
   getPhotos(anchor: any, limit: number = 999) : Promise<cameraRollPhoto[]> {
@@ -189,14 +158,12 @@ export class MappiPage {
     let filterOptions : optionsFilter;
 
     if (typeof anchor == 'string'){
-      // match with locations below
-      let city = anchor as string;
-      // if ( Object.keys(somewhereIn).indexOf(city) == -1) {
-      if (_.includes(Object.keys(somewhereIn),city) == false) {
+      const place = _.find(this.destinations, {'label': anchor});
+      if (!place) {
         throw new Error("Unknown city")
       }
       filterOptions = {
-        'near': {point: somewhereIn[city], distance: 10000}
+        'near': {point: place.location, distance: 10000}
       }
     // } else if ( Google && anchor instanceof Google.maps.LatLngBounds ) {
     } else if ( typeof anchor == 'function') {
@@ -221,7 +188,7 @@ export class MappiPage {
       console.warn( `CameraRoll, filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
       if (myPhotos[0]) {
         this.selected = myPhotos[0];
-        this.getMap(this.selected.location);
+        this.getMap(this.selected.location, false);
         // hack: to show image src
         this.imgSvc.getSrc(this.selected).then( src=>this.selected['src']=src );
       }
@@ -239,6 +206,7 @@ export class MappiPage {
 
 
     // render markers for current value of this.photos
+    console.warn(`MappiPage: showMarkers(), photos=${this.photos.length}`);
     let sebmMarkers : sebmMarker[] = this.photos.reduce( (result, o, i) => {
       if (!o.location) return result
 
