@@ -37,8 +37,7 @@ export class MappiMarkerClusterer extends MarkerClusterer {
 
 // we need to override the method in the base class
 ClusterIcon.prototype.triggerClusterClick0 = ClusterIcon.prototype.triggerClusterClick;
-ClusterIcon.prototype.triggerClusterClick = ()=>{
-  ClusterIcon.prototype.triggerClusterClick0()
-  // added
+ClusterIcon.prototype.triggerClusterClick = function(...args: any[]){
+  this.triggerClusterClick0.apply(this, args);
   google.maps.event.trigger(this.map_, 'clusterclick', this.cluster_);
 }

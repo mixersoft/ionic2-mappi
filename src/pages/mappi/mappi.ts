@@ -1,6 +1,7 @@
-import { Component, EventEmitter, 
+import { Component, EventEmitter, Inject,
   OnInit, AfterViewInit, OnChanges, SimpleChanges,
   Input, Output,
+  Pipe, PipeTransform, 
   ViewChild 
 } from '@angular/core';
 import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
@@ -24,6 +25,44 @@ const DEFAULT = {
   zoom: 14
 }
 
+@Pipe({ name:"renderPhotoForView" })
+export class renderPhotoForView implements PipeTransform {
+  constructor( private imgSvc: ImageService ){ 
+    console.warn("angular2 DatePipe is broken on safari, using manual format");
+  }
+  /**
+   * convert a cameraRollPhoto.localTime string to Date() in local timezone
+   * e.g. cameraRollPhoto.localTime = "2014-10-24 04:45:04.000" => Date()
+   */
+  localTimeAsDate(localTime:string): Date {
+    try {
+      const [,d,h,m,s] = localTime.match( /(.*)\s(\d*):(\d*):(\d*)\./)
+      const dt = new Date(d);
+      dt.setHours(parseInt(h), parseInt(m), parseInt(s));
+      // console.log(`localTimeAsDate=${dt.toISOString()}`)
+      return dt;
+    } catch (err) {
+      throw new Error(`Invalid localTime string, value=${localTime}`);
+    }
+  }
+  transform(photos: cameraRollPhoto[]) : any[] {
+    return photos.map(o=>{
+      const add :any = { '$src': ""};
+      if (o.localTime) {
+        // BUG: safari does not parse ISO Date strings
+        add['$localTime'] = this.localTimeAsDate(o.localTime);
+        // console.warn(`>>> renderPhotoForView attrs=${JSON.stringify(add)}`);
+        // add['$localTime'] = this.datePipe.transform( add['$localTime'], "medium");
+        // TODO: use momentjs
+        add['$localTime'] = add['$localTime'].toString().slice(0,24);
+      }
+      _.extend(add, o);
+      this.imgSvc.getSrc(o).then( src=>add['$src']=src );
+      return add;
+    })
+  }
+}
+
 @Component({
   templateUrl: 'mappi.html'
   , providers: [ DestinationService ]
@@ -37,7 +76,7 @@ export class MappiPage {
   mapZoom: number = DEFAULT.zoom;
   sebmMarkers: sebmMarker[] = [];
   photos: cameraRollPhoto[] = [];     // photos to be mapped
-  selected: cameraRollPhoto;
+  selecteds: cameraRollPhoto[];
   destinations: {label:string,location:GeoJsonPoint}[];
   selectedCity: string;
   @ViewChild('mapCtrl') private _mapCtrl: MapGoogleComponent;
@@ -69,6 +108,7 @@ export class MappiPage {
         this.destinations = results;
         const initialLocation = _.find(this.destinations, {label:'Sofia'}); 
         this.getMap( initialLocation, true)
+        // triggers: mapBoundsChange() > getPhotos() > this.photos
       }      
     )
   }
@@ -90,11 +130,17 @@ export class MappiPage {
     this.getPhotos(contains, 999)
     .then( photos=>{
       this.photos = photos;
+      if (this.photos.length == 0)
+        return
+
+      if (this.selecteds == undefined)
+        this.selecteds = this.photos.slice(0,1)
+
+      const contains = this._mapCtrl.getMapContainsFn();
+      const first = this.selecteds[0];
+      if (!contains(first.location))
+        this.getMap(first.location, false);
       console.warn(`MappiPage: received mapBoundsChange(), photos=${this.photos.length}`);
-
-      // TODO: call MapGoogleComponent.render()
-      // OR, MapGoogleComponent.ngDoCheck() on this.data
-
     })
   }
 
@@ -102,10 +148,10 @@ export class MappiPage {
   markerClick(uuids: string[]) {
     let data = this.photos.filter( o => _.includes(uuids, o.uuid)  );
     data = _.sortBy(data, 'localTime');
-    this.selected = data[0];
-    // TODO: move both to ngOnChanges()??
-    this.imgSvc.getSrc(this.selected).then( src=>this.selected['src']=src );
-    console.log(`markerClick, uuid=${this.selected.uuid}`)
+    // this.selecteds.length = 0;  // empty array
+    const PREVIEW_COUNT = this.cameraRoll.isCordova ? 3 : 1;
+    this.selecteds = data.slice(0,PREVIEW_COUNT);
+    console.warn(`markerClick, selected=${_.map(this.selecteds, 'filename')}`);
   }
 
   /**
@@ -119,7 +165,7 @@ export class MappiPage {
     // reset details
     // TODO: listen to reset event?
     this.photos = [];
-
+    this.selecteds = undefined;
   }
 
   getMap(arg: {location:GeoJsonPoint} | GeoJsonPoint, resetMap:boolean = false) : void
@@ -186,14 +232,6 @@ export class MappiPage {
 
       let myPhotos = this.cameraRoll.getPhotos(limit)
       console.warn( `CameraRoll, filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
-      if (myPhotos[0]) {
-        this.selected = myPhotos[0];
-        const contains = this._mapCtrl.getMapContainsFn();
-        if (!contains(this.selected.location))
-          this.getMap(this.selected.location, false);
-        // hack: to show image src
-        this.imgSvc.getSrc(this.selected).then( src=>this.selected['src']=src );
-      }
       return myPhotos;
     })
   }
@@ -252,7 +290,7 @@ export class MappiPage {
 
   showRoute( photos?: cameraRollPhoto[] , limit: number = 10 ) {
     if (this.show.markers) {
-      photos = CameraRoll.sortPhotos(photos || this.photos);
+      photos = CameraRollWithLoc.sortPhotos(photos || this.photos);
       photos = photos.slice(0,limit);
       this._mapCtrl.showRoute(photos);
     } else if (this.show.clusterMap) {

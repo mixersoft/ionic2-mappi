@@ -88,6 +88,7 @@ export function distanceBetweenLatLng (p1: any, p2:any) : number {
 };
 
 export class CameraRollWithLoc {
+  public isCordova = true;
 
   protected _photos : cameraRollPhoto[] = [];
   protected _filter : optionsFilter = {};
@@ -319,6 +320,7 @@ export class CameraRollWithLoc {
  * use static data for testing without Cordova
  */
 export class MockCameraRollWithLoc extends CameraRollWithLoc {
+  isCordova: boolean = false;
   constructor(){
     super();
     console.warn("cordova.plugins.CameraRollLocation not available, using sample data");

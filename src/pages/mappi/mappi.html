@@ -23,7 +23,7 @@
         [center]="mapCenter"
         [zoom]="mapZoom"
         [viz]="xxxviz"
-        [data]="xxxdata"
+        [data]="xxxphotos"
         [(sebmMarkers)]="sebmMarkers"
         (mapBoundsChange)="mapBoundsChange($event)"
         (markerClick)="markerClick($event)"
@@ -40,14 +40,16 @@
     </div>
     <div id="map-panel"></div>
 
-    <ion-card *ngIf="this.selected">
-      <img [src]="this.selected.src"/>
+    <ion-card *ngFor="let selected of ( (selecteds || photos.slice(0,1)) | renderPhotoForView ) ">
+      <img [src]="selected.$src"/>
       <ion-card-content>
         <ion-card-title>
-          {{this.selected.filename}}
-        </ion-card-title>
-        <p> {{this.selected.uuid}} </p>
-        <p> {{this.selected.localTime}} </p>
+          {{selected.filename}}
+          <ion-icon name="star" *ngIf="selected.isFavorite"></ion-icon>
+        </ion-card-title>   
+        <p > taken: {{ selected.$localTime }} </p>
+        <p [hidden]="!selected.location"> gps: [{{selected.location?.coordinates}}] <p>
+        <p class="truncate"> {{selected.uuid}} </p>
       </ion-card-content>
     </ion-card>
   </div>
