@@ -12,6 +12,7 @@ import { TabsPage } from '../pages/tabs/tabs';
 import { SharedModule } from '../shared/shared.module';
 import { NameListService } from '../shared/index';
 
+import { CameraRollWithLoc, MockCameraRollWithLoc } from "../shared/camera-roll/camera-roll.service";
 import { ImageService, CordovaImageService } from "../shared/camera-roll/image.service";
 
 
@@ -46,12 +47,21 @@ import { ImageService, CordovaImageService } from "../shared/camera-roll/image.s
       provide: ImageService
       , deps: [Platform]
       , useFactory: (platform: Platform)=>{
-        if (platform.is("cordova")){
-          return new CordovaImageService(platform)
-        } else {
-          return new ImageService(platform)
+          if (platform.is("cordova"))
+            return new CordovaImageService(platform)
+          else 
+            return new ImageService(platform)
         }
-      }
+    },
+    , {
+      provide: CameraRollWithLoc
+      , deps: [Platform]
+      , useFactory: (platform: Platform)=>{
+          if (platform.is("cordova"))
+            return new CameraRollWithLoc()
+          else 
+            return new MockCameraRollWithLoc()
+        }
     }
   ]
 })

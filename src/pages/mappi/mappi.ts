@@ -10,8 +10,8 @@ import _ from "lodash";
 
 import { GeoJsonPoint, isGeoJson } from "../../shared/camera-roll/location-helper";
 import {
-  CameraRollWithLoc as CameraRoll,
-  cameraRollPhoto, mediaType, optionsFilter
+  CameraRollWithLoc, cameraRollPhoto, 
+  mediaType, optionsFilter
 } from "../../shared/camera-roll/camera-roll.service";
 import { sebmMarker, mapContainsFn, mapContainsLoc, MapGoogleComponent } from "../../shared/map-google/index";
 import { ExtendedGoogleMapsAPIWrapper as GMaps } from "../../shared/map-google/extended-google-maps-api-wrapper";
@@ -42,7 +42,6 @@ export class MappiPage {
   selectedCity: string;
   @ViewChild('mapCtrl') private _mapCtrl: MapGoogleComponent;
 
-  private cameraRoll : CameraRoll = new CameraRoll();
   private show : any = {
     markers: false,
     heatMap: false,
@@ -57,6 +56,7 @@ export class MappiPage {
     public navCtrl: NavController
     , public destinationSvc: DestinationService
     , public imgSvc: ImageService
+    , private cameraRoll: CameraRollWithLoc
   ) {}
 
   /**
@@ -188,7 +188,9 @@ export class MappiPage {
       console.warn( `CameraRoll, filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
       if (myPhotos[0]) {
         this.selected = myPhotos[0];
-        this.getMap(this.selected.location, false);
+        const contains = this._mapCtrl.getMapContainsFn();
+        if (!contains(this.selected.location))
+          this.getMap(this.selected.location, false);
         // hack: to show image src
         this.imgSvc.getSrc(this.selected).then( src=>this.selected['src']=src );
       }

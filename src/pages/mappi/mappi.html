@@ -40,14 +40,14 @@
     </div>
     <div id="map-panel"></div>
 
-    <ion-card *ngIf="photos.length">
-      <img [src]="photos[0].src"/>
+    <ion-card *ngIf="this.selected">
+      <img [src]="this.selected.src"/>
       <ion-card-content>
         <ion-card-title>
-          {{photos[0].filename}}
+          {{this.selected.filename}}
         </ion-card-title>
-        <p> {{photos[0].uuid}} </p>
-        <p> {{photos[0].localTime}} </p>
+        <p> {{this.selected.uuid}} </p>
+        <p> {{this.selected.localTime}} </p>
       </ion-card-content>
     </ion-card>
   </div>

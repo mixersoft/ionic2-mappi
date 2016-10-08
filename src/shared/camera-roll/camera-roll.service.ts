@@ -1,7 +1,7 @@
 //  for demo data
 import _ from "lodash";
 
-import {cameraRoll as cameraRollAsJsonString} from "./dev-raw-camera-roll";
+import {cameraRoll as cameraRollAsJsonString} from "../../mocks/mock-camera-roll";
 import * as Location from "./location-helper";
 import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
 
@@ -176,9 +176,7 @@ export class CameraRollWithLoc {
     return grouped;
   }
 
-  constructor (
-    rawData: string = cameraRollAsJsonString
-  ) {
+  constructor ( ) {
   }
 
   /**
@@ -199,16 +197,9 @@ export class CameraRollWithLoc {
     if (plugin) {
       pr = plugin['getByMoments'](options)
     } else {
-      if (!this._photos.length) {
-        console.warn("cordova.plugins.CameraRollLocation not available, using sample data");
-        try {
-          let parsed = JSON.parse( cameraRollAsJsonString ) as cameraRollPhoto[];
-          this._photos = parsed;
-        } catch (e) {
-          console.error( "Error parsing JSON" );
-        }
-      }
-      pr = Promise.resolve(this._photos)
+      const err = "cordova.plugins.CameraRollLocation not available";
+      console.error(err);
+      throw new Error(err);
     }
     return pr.then( (photos)=>{
       photos.forEach( (o)=> {
@@ -322,5 +313,38 @@ export class CameraRollWithLoc {
 
 }
 
+
+
+/**
+ * use static data for testing without Cordova
+ */
+export class MockCameraRollWithLoc extends CameraRollWithLoc {
+  constructor(){
+    super();
+    console.warn("cordova.plugins.CameraRollLocation not available, using sample data");
+    try {
+      let parsed = JSON.parse( cameraRollAsJsonString ) as cameraRollPhoto[];
+      this._photos = parsed;
+    } catch (e) {
+      console.error( "Error parsing JSON" );
+    }
+    this._photos.forEach( (o)=> {
+      if (o.location && o.location instanceof Location.GeoJsonPoint == false ) {
+        o.location = new Location.GeoJsonPoint(o.location);
+      }
+    });
+  }
+
+  /**
+   * get cameraRollPhoto[] from CameraRoll using Plugin,
+   * uses cached values by default, ignore with force==true
+   * @param  {any}                  interface optionsFilter
+   * @param  {boolean = false}      refresh
+   * @return {Promise<cameraRollPhoto[]>}         [description]
+   */
+  queryPhotos(options?: any, force:boolean = false) : Promise<cameraRollPhoto[]>{
+    return Promise.resolve(this._photos);
+  }
+}
 
 console.log('cameraRoll.ts is now loaded...');

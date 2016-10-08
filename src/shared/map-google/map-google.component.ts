@@ -145,7 +145,6 @@ export class MapGoogleComponent {
     // Promise
     this.ready = new Promise<void>(
       (resolve, reject) =>{
-        console.warn("this.ready Promise code, should be called only 1 time!!!"); 
         this._readyResolver = resolve;
       }
     )
