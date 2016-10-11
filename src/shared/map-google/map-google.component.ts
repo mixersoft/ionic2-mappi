@@ -1,4 +1,6 @@
-import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
+import { Component, EventEmitter, Input, Output, ViewChild, 
+  OnChanges, SimpleChanges, SimpleChange 
+} from '@angular/core';
 import _ from "lodash";
 import { Observable } from 'rxjs/Observable';
 import { Subject } from 'rxjs/Subject';
@@ -78,6 +80,13 @@ export interface mapContainsFn {
   (location: GeoJsonPoint): boolean
 }
 
+export enum mapViz {
+  None,
+  Markers,
+  HeatMap,
+  ClusterMap,
+}
+
 /* external globals */
 declare var window;
 declare var MarkerClusterer: any;
@@ -122,8 +131,9 @@ export class MapGoogleComponent {
   @Output() mapBoundsChange: EventEmitter<mapContainsFn> = new EventEmitter<mapContainsFn>();
   @Output() markerClick: EventEmitter<string[]> = new EventEmitter<string[]>();
 
-  @Input() data: any[];
-  @Input() viz: string;
+  @Input() data: cameraRollPhoto[];
+  @Input() viz: mapViz;
+  private _data: cameraRollPhoto[] = [];  // BUG? this.data not working with ngOnChanges()
 
   // google maps zoom level
   showMap: boolean = true;
@@ -141,6 +151,8 @@ export class MapGoogleComponent {
 
   // internal state attributes
   private _debounce_MapBoundsChange: Subject<LatLngBounds> = new Subject<LatLngBounds>();
+  private _debounce_MapOverlayRender: Subject<SimpleChange> = new Subject<SimpleChange>();
+  private _debounce_MapOverlayRenderComplete: Subject<string> = new Subject<string>();
   private _isMapChanging = false
 
   constructor(
@@ -204,8 +216,49 @@ export class MapGoogleComponent {
           console.warn("surpress mapBoundsChange until isMapChanging==false")
           return
         }
+        this._isMapChanging = true;
+        console.info(`## Map.mapBoundsChange.emit(), this.isMapChanging=${this._isMapChanging }`)
+        // listen for _debounce_MapOverlayRenderComplete.next() and debounce
         this.mapBoundsChange.emit( this.getMapContainsFn( value )  )
       });
+
+    // should this be throttle?
+    this._debounce_MapOverlayRender
+      .debounceTime(100)
+      .subscribe( (change)=>{
+        console.info(`>>>> Map._debounce_MapOverlayRender, this.isMapChanging=${this._isMapChanging }`)
+        this.renderMapVizChange(change);
+      })
+    
+    this._debounce_MapOverlayRenderComplete
+      .debounceTime(500)
+      .subscribe( (viz)=>{
+        this._isMapChanging = false;
+        console.info(`## Map._debounce_MapOverlayRenderComplete, viz=${viz}, this.isMapChanging=${this._isMapChanging }`)
+      })
+  }
+
+  ngOnChanges(changes: SimpleChanges) : void {
+    // console.log(`ngOnChanges: changes=${JSON.stringify(changes)}`);
+
+    // if (changes['data']) {
+    //   // when does this.data get set???
+    //   // change mapOverlay rendered data
+    //   console.info(`ngOnChanges, key=data, length=${changes['data'].currentValue.length}`);
+    //   if (!changes['viz'] && this.viz){
+    //     const sameViz = {
+    //       previousValue: undefined,
+    //       currentValue: this.viz
+    //     } as SimpleChange;
+    //     this._debounce_MapOverlayRender.next(sameViz);
+    //   }
+    // }
+
+    if (changes['viz']) {
+      // change map visualization
+      console.info(`ngOnChanges, viz=${changes['viz'].currentValue}`);
+      this._debounce_MapOverlayRender.next( changes['viz'] );
+    }
   }
 
 
@@ -239,14 +292,20 @@ export class MapGoogleComponent {
 
   onIdle(){
     // use as mapReady event
+    // fires after boundsChange or zoomChange complete
+    // but BEFORE Map.mapBoundsChange.emit()
     this._readyResolver();  // resolve this.ready, one time
-    this._isMapChanging = false;
+    this._debounce_MapOverlayRenderComplete.next("force");
   }
-  onRefresh(){
+  // TODO: not sure when we need to refresh
+  XXXonRefresh(){
     setTimeout( ()=>{
-      this.sebmGoogMap.triggerResize();
+      // not required??  what about if we change tabs?
+      // this.sebmGoogMap.triggerResize(); 
       // console.log(`this.sebmGoogMap.triggerResize();`);
-    },100);
+      this._isMapChanging = false;
+      console.warn(`## Map.onRefresh(), this.isMapChanging=${this._isMapChanging }`)
+    });
   }
   onReset(){
     this.showMap = false;
@@ -304,14 +363,14 @@ export class MapGoogleComponent {
   onClusterClick(cluster: any){
     // console.log(cluster);
     const uuids : string[] = cluster.markers_.map( (m:any) => m['uuid']);
+    // console.log(`onClusterClick: ${uuids}`)
     this.markerClick.emit( uuids );
   }
 
   /**
    * handles event binding for zoomChange, centerChange, boundsChange
    */
-  onChanged(label: string, value:any){
-    
+  onChanged(label: string, value:any){    
     switch (label) {
       case 'centerChange': value = [value.lat, value.lng]; break;
       case 'boundsChange':
@@ -320,7 +379,7 @@ export class MapGoogleComponent {
         .then( ()=>this._debounce_MapBoundsChange.next( value ) );
         break;
     }
-    console.log(`${label}=${value}, zoom=${this.sebmGoogMap.zoom}`)
+    // console.log(`${label}=${value}, zoom=${this.sebmGoogMap.zoom}`)
   }
 
   private _lastOpenIndex: number = -1;        // for closing last InfoWindow
@@ -332,7 +391,7 @@ export class MapGoogleComponent {
     // bubble up
     const uuid = this.sebmMarkers[index].uuid;
     this.markerClick.emit( [uuid] );
-    console.log(`clicked the marker: ${data.detail}`)
+    // console.log(`clicked the marker: ${data.detail}`)
   }
 
   mapClicked($event: any) {
@@ -385,39 +444,68 @@ export class MapGoogleComponent {
     }
     return containsFn;
   }
+  renderMapVizChange(viz: SimpleChange);
+  renderMapVizChange(data: any[]);
+  renderMapVizChange(arg0: any) {
+    if (!this._googMap) return
 
-  render(data: any[], viz: string, limit: number = 99 ) {
-    this._isMapChanging = true;
-    // this._isMapChanging=false in  onIdle()
+    let previousViz : mapViz;
+    let currentViz : mapViz;
+    if (arg0 instanceof SimpleChange) {
+      previousViz = arg0.previousValue;
+      currentViz = arg0.currentValue;
+    } else if (arg0 instanceof Array) {
+      this._data = arg0;
+      currentViz = this.viz || mapViz.None;
+    }
 
-    // let google : any = (window as WindowWithGoogle).google;
-    console.log(`render, zoom=${this.zoom}, map.zoom=${this._googMap.getZoom()}`)
-    switch ( viz ) {
-      case "markers":
-        if (data && data.length == 0) {
-          this.sebmMarkers = [];
-          WaypointService.clearRoutes(this._googMap);
-        } else {
-          let sebmMarkers = data as sebmMarker[];
-          this.sebmMarkers = sebmMarkers.slice(0,limit);
-        }
-        this.onRefresh();
-        break;
-      case "heatmap":
+    // reset old map layer
+    switch (previousViz) {
+      case mapViz.Markers:
         this.sebmMarkers = [];
-        this._markerClusterer.toggleVisible(false);
-
-        const points = data.slice(0,limit);
-        this._heatmap.render(points);
-        if (this._heatmap.isVisible==false)
-          WaypointService.clearRoutes(this._googMap);
+        WaypointService.clearRoutes(this._googMap);
         break;
-      case "marker-cluster":
-        this.sebmMarkers = [];
+      case mapViz.HeatMap:
         this._heatmap.toggleVisible(false);
+        WaypointService.clearRoutes(this._googMap);
+        break;
+      case mapViz.ClusterMap:
+        this._markerClusterer.toggleVisible(false);
+        WaypointService.clearRoutes(this._googMap);
+        break;
+    }
 
-        const photos: cameraRollPhoto[] = data;
-        const markers : Marker[] = photos.reduce( (result, o, i)=>{
+    // render new map layer
+    const photos = this._data;
+    let limit: number = 99;
+    switch (currentViz) {
+      case mapViz.Markers:
+        limit = 26;
+        const sebmMarkers : sebmMarker[] = photos.slice(0,limit).reduce( (result, o, i) => {
+          if (!o.location) return result
+          const m: sebmMarker = {
+            lat: o.location.latitude(),
+            lng: o.location.longitude(),
+            uuid: o.uuid,
+            detail: `${o.filename}`,
+            draggable: false
+          }
+          result.push(m);
+          return result;
+        }, [] as sebmMarker[]);
+        // update marker labels
+        sebmMarkers.forEach( (m, i)=> m.label = String.fromCharCode(97 + i) );
+        // render markers using SebmGoogleMapMarker
+        console.info(`renderMapVizChange() Markers, count=${photos.length}`)
+        this.sebmMarkers = sebmMarkers;
+        break;
+      case mapViz.HeatMap:
+        let data = photos.slice(0,limit).filter( Boolean ).map( o => o.location );
+        const points = data.slice(0,limit);
+        this._heatmap.render(points)
+        break;
+      case mapViz.ClusterMap:
+        const markers : Marker[] = photos.slice(0,limit).reduce( (result, o, i)=>{
           if (!o.location) return result;
           const [lng,lat] = o.location.coordinates;
           // TODO: can we modify the markerClusterer to use sebmMarkers?
@@ -431,11 +519,71 @@ export class MapGoogleComponent {
           return result;
         }, [] );
         this['_markerClustererPhotos'] = photos;  // for lookup
-        this._markerClusterer.render(markers);
-        if (this._markerClusterer.isVisible==false)
-          WaypointService.clearRoutes(this._googMap);
+        this._markerClusterer.render(markers)
+        break;
     }
+    this._debounce_MapOverlayRenderComplete.next(currentViz.toString());
   }
+
+
+  // render(data: any[], viz: string, limit: number = 99 ) {
+  //   this._isMapChanging = true;
+  //   // this._isMapChanging=false in  onIdle()
+  //   // let google : any = (window as WindowWithGoogle).google;
+  //   console.log(`render, zoom=${this.zoom}, map.zoom=${this._googMap.getZoom()}`)
+  //   switch ( viz ) {
+  //     case "markers":
+  //       if (data && data.length == 0) {
+  //         this.sebmMarkers = [];
+  //         WaypointService.clearRoutes(this._googMap);
+  //       } else {
+  //         let sebmMarkers = data as sebmMarker[];
+  //         this.sebmMarkers = sebmMarkers.slice(0,limit);
+  //       }
+  //       // this.onRefresh();
+  //       this._debounce_MapOverlayRenderComplete.next(viz);
+  //       break;
+
+  //     case "heatmap":
+  //       this.sebmMarkers = [];
+  //       this._markerClusterer.toggleVisible(false);
+
+  //       const points = data.slice(0,limit);
+  //       this._heatmap.render(points)
+  //       .then( ()=>{
+  //         if (this._heatmap.isVisible==false)
+  //           WaypointService.clearRoutes(this._googMap);
+  //         this._debounce_MapOverlayRenderComplete.next(viz);
+  //       });
+  //       break;
+
+  //     case "marker-cluster":
+  //       this.sebmMarkers = [];
+  //       this._heatmap.toggleVisible(false);
+
+  //       const photos: cameraRollPhoto[] = data;
+  //       const markers : Marker[] = photos.reduce( (result, o, i)=>{
+  //         if (!o.location) return result;
+  //         const [lng,lat] = o.location.coordinates;
+  //         // TODO: can we modify the markerClusterer to use sebmMarkers?
+  //         // maybe add a callback for marker rendering?
+  //         let marker : uuidMarker = new Google.maps.Marker({
+  //           'position': new Google.maps.LatLng(lat,lng),
+  //           'title': o.filename,
+  //         });
+  //         marker['uuid'] = o.uuid;
+  //         result.push( marker );
+  //         return result;
+  //       }, [] );
+  //       this['_markerClustererPhotos'] = photos;  // for lookup
+  //       this._markerClusterer.render(markers)
+  //       .then( ()=>{
+  //         if (this._markerClusterer.isVisible==false)
+  //           WaypointService.clearRoutes(this._googMap);
+  //         this._debounce_MapOverlayRenderComplete.next(viz);
+  //       });
+  //   }
+  // }
 
 
   getRouteOptsFromClusters( clusters: jmcCluster[]) : directionsRequest {

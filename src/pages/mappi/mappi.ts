@@ -14,7 +14,9 @@ import {
   CameraRollWithLoc, cameraRollPhoto, 
   mediaType, optionsFilter
 } from "../../shared/camera-roll/camera-roll.service";
-import { sebmMarker, mapContainsFn, mapContainsLoc, MapGoogleComponent } from "../../shared/map-google/index";
+import { sebmMarker, MapGoogleComponent,
+  mapContainsFn, mapContainsLoc, mapViz 
+} from "../../shared/map-google/index";
 import { ExtendedGoogleMapsAPIWrapper as GMaps } from "../../shared/map-google/extended-google-maps-api-wrapper";
 import { WaypointService } from "../../shared/map-google/waypoint.service";
 import { ImageService } from "../../shared/camera-roll/image.service";
@@ -72,6 +74,7 @@ export class MappiPage {
 
   errorMessage: string;
 
+  viz: mapViz; 
   mapCenter: GeoJsonPoint;
   mapZoom: number = DEFAULT.zoom;
   sebmMarkers: sebmMarker[] = [];
@@ -119,6 +122,10 @@ export class MappiPage {
 
   ngOnChanges(changes: SimpleChanges) : void {
     // changes.prop contains the old and the new value...
+    if (changes['viz']) {
+      // change map visualization
+      console.info("// change map visualization");
+    }
   }
 
 
@@ -127,32 +134,12 @@ export class MappiPage {
    */
 
   mapBoundsChange(contains: mapContainsFn) {
+    console.warn(`0: MappiPage.mapBoundsChange(), photos=${this.photos.length}`);
     this.getPhotos(contains, 999)
     .then( photos=>{
-      this.photos = photos;
-      if (this.photos.length == 0)
-        return
-
-      if (this.selecteds == undefined)
-        this.selecteds = this.photos.slice(0,1)
-
-      // TODO: check viz
-      // render Map for new photos
-      if (this.show.markers) {
-        this.showMarkers(this.photos)
-        const contains = this._mapCtrl.getMapContainsFn();
-        const first = this.selecteds[0];
-        if (!contains(first.location))
-          console.warn(`1: MappiPage.mapBoundsChange(), photos=${this.photos.length}`);
-          this.getMap(first.location, false);
-          
-      } else if (this.show.heatmap) {
-        this.showHeatmap(this.photos)
-      } else if (this.show.clusterMap) {
-        this.showClusterer(this.photos)  
-      }
-
-
+      // this.photos = photos;
+      this._mapCtrl.renderMapVizChange(photos)
+      return
     })
   }
 
@@ -253,62 +240,73 @@ export class MappiPage {
   }
 
   toggleMarkers() {
-    this.show.markers = !this.show.markers
-    let data : cameraRollPhoto[] = this.show.markers ? this.photos : []
-    this.showMarkers( data )
+    this.viz = (this.viz == mapViz.Markers) ? mapViz.None : mapViz.Markers;
+    return
+
+    // this.show.markers = !this.show.markers
+    // let data : cameraRollPhoto[] = this.show.markers ? this.photos : []
+    // this.showMarkers( data )
   }
+  // showMarkers( photos: cameraRollPhoto[], limit: number = 20 ) {
+  //   // render markers for current value of this.photos
+  //   console.warn(`MappiPage: showMarkers(), photos=${photos.length}`);
+  //   let sebmMarkers : sebmMarker[] = photos.reduce( (result, o, i) => {
+  //     if (!o.location) return result
 
-  showMarkers( photos: cameraRollPhoto[], limit: number = 20 ) {
-    // render markers for current value of this.photos
-    console.warn(`MappiPage: showMarkers(), photos=${photos.length}`);
-    let sebmMarkers : sebmMarker[] = photos.reduce( (result, o, i) => {
-      if (!o.location) return result
+  //     let m: sebmMarker = {
+  //       lat: o.location.latitude(),
+  //       lng: o.location.longitude(),
+  //       uuid: o.uuid,
+  //       detail: `${o.filename}`,
+  //       draggable: false
+  //     }
+  //     result.push(m);
+  //     return result;
+  //   }, [] as sebmMarker[]);
+  //   // update marker labels
+  //   sebmMarkers.forEach( (m, i)=> m.label = String.fromCharCode(97 + i) );
 
-      let m: sebmMarker = {
-        lat: o.location.latitude(),
-        lng: o.location.longitude(),
-        uuid: o.uuid,
-        detail: `${o.filename}`,
-        draggable: false
-      }
-      result.push(m);
-      return result;
-    }, [] as sebmMarker[]);
-    // update marker labels
-    sebmMarkers.forEach( (m, i)=> m.label = String.fromCharCode(97 + i) );
+  //   this._mapCtrl.render(sebmMarkers, 'markers', limit);
+  // }
 
-    this._mapCtrl.render(sebmMarkers, 'markers', limit);
 
-  }
 
+  // TODO: move this._mapCtrl.render() to MapGoogleComponent.ngOnChanges()
   toggleHeatmap(){
-    this.show.heatMap = !this.show.heatMap
-    let data : cameraRollPhoto[] = this.show.heatMap ? this.photos : []
-    this.showHeatmap( data )
+    this.viz = (this.viz == mapViz.HeatMap) ? mapViz.None : mapViz.HeatMap;
+    return
+
+    // this.show.heatMap = !this.show.heatMap
+    // let data : cameraRollPhoto[] = this.show.heatMap ? this.photos : []
+    // this.showHeatmap( data )
   }
-  showHeatmap( photos: cameraRollPhoto[] , limit: number = 99 ) {
-    let data = photos.filter( Boolean ).map( o => o.location );
-    this._mapCtrl.render(data, 'heatmap', limit);
-    this.show.clusterMap = false;
-  }
+  // showHeatmap( photos: cameraRollPhoto[] , limit: number = 99 ) {
+  //   let data = photos.filter( Boolean ).map( o => o.location );
+  //   this._mapCtrl.render(data, 'heatmap', limit);
+  //   this.show.clusterMap = false;
+  // }
 
   toggleClusterer() {
-    this.show.clusterMap = !this.show.clusterMap
-    let data : cameraRollPhoto[] = this.show.clusterMap ? this.photos : []
-    this.showClusterer( data )
+    this.viz = (this.viz == mapViz.ClusterMap) ? mapViz.None : mapViz.ClusterMap;
+    return
+
+    // this.show.clusterMap = !this.show.clusterMap
+    // let data : cameraRollPhoto[] = this.show.clusterMap ? this.photos : []
+    // this.showClusterer( data )
   }
-  showClusterer( photos: cameraRollPhoto[] , limit: number = 999 ) {
-    this._mapCtrl.render(photos, 'marker-cluster', limit);
-    this.show.heatMap = false;
-  }
+  // showClusterer( photos: cameraRollPhoto[] , limit: number = 999 ) {
+  //   this._mapCtrl.render(photos, 'marker-cluster', limit);
+  //   this.show.heatMap = false;
+  // }
 
   showRoute( photos?: cameraRollPhoto[] , limit: number = 10 ) {
+    let isRouteShown: boolean;
     if (this.show.markers) {
       photos = CameraRollWithLoc.sortPhotos(photos || this.photos);
       photos = photos.slice(0,limit);
-      this._mapCtrl.showRoute(photos);
+      isRouteShown = this._mapCtrl.showRoute(photos);
     } else if (this.show.clusterMap) {
-      this._mapCtrl.showRoute();
+      isRouteShown = this._mapCtrl.showRoute();
     }
   }
 }
