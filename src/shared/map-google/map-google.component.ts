@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import _ from "lodash";
 import { Observable } from 'rxjs/Observable';
+import { Subject } from 'rxjs/Subject';
 import 'rxjs/Rx';
 
 // import { SebmGoogleMap, SebmGoogleMapMarker, SebmGoogleMapInfoWindow } from 'angular2-google-maps/core/directives';
@@ -94,8 +95,10 @@ let Google : any = undefined;
   templateUrl: 'map-google.component.html',
   styles: [`
     .sebm-google-map-container {
-       height: 300px;
-     }
+      height: 300px;
+      opacity: 0;
+      transition: opacity 150ms ease-in;
+    }
     @media only screen and (min-width: 500px) {
       .sebm-google-map-container {
          height: 480px;
@@ -136,6 +139,10 @@ export class MapGoogleComponent {
   private _googMap: GoogleMap;
   private _google: any;
 
+  // internal state attributes
+  private _debounce_MapBoundsChange: Subject<LatLngBounds> = new Subject<LatLngBounds>();
+  private _isMapChanging = false
+
   constructor(
     private _markerClusterer : MarkerClustererService
     , private _heatmap : HeatmapService
@@ -160,6 +167,10 @@ export class MapGoogleComponent {
     // experimental
     let ready$ = Observable.fromPromise(this.ready)
     ready$.subscribe();
+
+    this.initDebouncers();
+    
+    
   }
 
   ngOnInit() {
@@ -182,6 +193,19 @@ export class MapGoogleComponent {
 
   ngOnDestroy(){
     this._markerClusterer.selected.unsubscribe();
+  }
+
+  initDebouncers() {
+    this._debounce_MapBoundsChange
+      .debounceTime(500)
+      .subscribe( value=>{
+        // console.warn(`_debounce_MapBoundsChange( ${value} )`)
+        if (this._isMapChanging) {
+          console.warn("surpress mapBoundsChange until isMapChanging==false")
+          return
+        }
+        this.mapBoundsChange.emit( this.getMapContainsFn( value )  )
+      });
   }
 
 
@@ -212,9 +236,11 @@ export class MapGoogleComponent {
 
 
 
+
   onIdle(){
     // use as mapReady event
     this._readyResolver();  // resolve this.ready, one time
+    this._isMapChanging = false;
   }
   onRefresh(){
     setTimeout( ()=>{
@@ -281,6 +307,9 @@ export class MapGoogleComponent {
     this.markerClick.emit( uuids );
   }
 
+  /**
+   * handles event binding for zoomChange, centerChange, boundsChange
+   */
   onChanged(label: string, value:any){
     
     switch (label) {
@@ -288,22 +317,13 @@ export class MapGoogleComponent {
       case 'boundsChange':
         // bubble up
         this.waitForGoogleMaps()
-        .then( ()=>{
-          this.debouncedTriggerMapBoundsChanged(value);
-        })
+        .then( ()=>this._debounce_MapBoundsChange.next( value ) );
         break;
     }
     console.log(`${label}=${value}, zoom=${this.sebmGoogMap.zoom}`)
   }
-  
-  // triggerMapBoundsChanged = 
-  debouncedTriggerMapBoundsChanged = _.debounce( (bounds: LatLngBounds)=>{
-    this.mapBoundsChange.emit(this.getMapContainsFn( bounds ));
-    // TODO: listen to ngOnChanges this.photos and update accordingly
-  }, 500);
 
-
-  private _lastOpenIndex: number = -1;
+  private _lastOpenIndex: number = -1;        // for closing last InfoWindow
   clickedMarker( data: any, index: number) {
     data['isOpen'] = true;
     if (this._lastOpenIndex > -1) this.sebmMarkers[this._lastOpenIndex]['isOpen'] = false;
@@ -348,7 +368,7 @@ export class MapGoogleComponent {
   /**
    * experimental
    */
-  getMapContainsFn(bounds: LatLngBounds) : mapContainsFn {
+  getMapContainsFn(bounds?: LatLngBounds) : mapContainsFn {
     if (!this._googMap) return function(){
       return false;
     };
@@ -367,11 +387,14 @@ export class MapGoogleComponent {
   }
 
   render(data: any[], viz: string, limit: number = 99 ) {
+    this._isMapChanging = true;
+    // this._isMapChanging=false in  onIdle()
+
     // let google : any = (window as WindowWithGoogle).google;
     console.log(`render, zoom=${this.zoom}, map.zoom=${this._googMap.getZoom()}`)
     switch ( viz ) {
       case "markers":
-        if (this.sebmMarkers && this.sebmMarkers.length) {
+        if (data && data.length == 0) {
           this.sebmMarkers = [];
           WaypointService.clearRoutes(this._googMap);
         } else {

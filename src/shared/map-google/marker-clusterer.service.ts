@@ -36,20 +36,6 @@ export class MarkerClustererService {
     Google = o.google;
   }
 
-  listenForClustersChanged(on: boolean = true) {
-    if (!this.map) return;
-    if (!on) {
-      console.info("Clear listeners for clustersChanged")
-      Google.maps.event.clearListeners(this.map, "clustersChanged");
-    }else{
-      console.info("ADD listeners for clustersChanged")
-      Google.maps.event.addListener(this.map, 'clustersChanged', (clusters:jmcCluster[])=>{
-        console.warn("NOT EMITTING clustersChanged, see MarkerClustererService.getVisibleClusters()")
-        // this.clusters.emit(clusters);
-      });
-    }
-  }
-
   listenForClusterClick(on: boolean = true){
     if (!this.map) return;
     if (!on)
@@ -108,7 +94,6 @@ export class MarkerClustererService {
       this.isVisible = true
     } else {
       this.listenForClusterClick();
-      this.listenForClustersChanged();
       this.instance = new MappiMarkerClusterer(
         this.map,
         markers,

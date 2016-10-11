@@ -136,11 +136,23 @@ export class MappiPage {
       if (this.selecteds == undefined)
         this.selecteds = this.photos.slice(0,1)
 
-      const contains = this._mapCtrl.getMapContainsFn();
-      const first = this.selecteds[0];
-      if (!contains(first.location))
-        this.getMap(first.location, false);
-      console.warn(`MappiPage: received mapBoundsChange(), photos=${this.photos.length}`);
+      // TODO: check viz
+      // render Map for new photos
+      if (this.show.markers) {
+        this.showMarkers(this.photos)
+        const contains = this._mapCtrl.getMapContainsFn();
+        const first = this.selecteds[0];
+        if (!contains(first.location))
+          console.warn(`1: MappiPage.mapBoundsChange(), photos=${this.photos.length}`);
+          this.getMap(first.location, false);
+          
+      } else if (this.show.heatmap) {
+        this.showHeatmap(this.photos)
+      } else if (this.show.clusterMap) {
+        this.showClusterer(this.photos)  
+      }
+
+
     })
   }
 
@@ -150,8 +162,12 @@ export class MappiPage {
     data = _.sortBy(data, 'localTime');
     // this.selecteds.length = 0;  // empty array
     const PREVIEW_COUNT = this.cameraRoll.isCordova ? 3 : 1;
-    this.selecteds = data.slice(0,PREVIEW_COUNT);
-    console.warn(`markerClick, selected=${_.map(this.selecteds, 'filename')}`);
+    const preferImages = _.filter(data, {mediaType: mediaType.Image});
+    this.selecteds = (preferImages.length >= PREVIEW_COUNT) 
+      ? preferImages.slice(0,PREVIEW_COUNT)
+      : data.slice(0,PREVIEW_COUNT);
+    // this.selecteds = _.filter(data, {mediaType: mediaType.Image}).slice(0,PREVIEW_COUNT);
+    // console.warn(`markerClick, selected=${_.map(this.selecteds, 'filename')}`);
   }
 
   /**
@@ -231,23 +247,21 @@ export class MappiPage {
         }])
 
       let myPhotos = this.cameraRoll.getPhotos(limit)
-      console.warn( `CameraRoll, filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
+      console.warn( `MappiPage.getPhotos(), filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
       return myPhotos;
     })
   }
 
-  showMarkers( photos: cameraRollPhoto[], limit: number = 20 ) {
+  toggleMarkers() {
     this.show.markers = !this.show.markers
-    if (!this.show.markers) {
-      // clear markers
-      this._mapCtrl.render([], 'markers', limit);
-      return;
-    }
+    let data : cameraRollPhoto[] = this.show.markers ? this.photos : []
+    this.showMarkers( data )
+  }
 
-
+  showMarkers( photos: cameraRollPhoto[], limit: number = 20 ) {
     // render markers for current value of this.photos
-    console.warn(`MappiPage: showMarkers(), photos=${this.photos.length}`);
-    let sebmMarkers : sebmMarker[] = this.photos.reduce( (result, o, i) => {
+    console.warn(`MappiPage: showMarkers(), photos=${photos.length}`);
+    let sebmMarkers : sebmMarker[] = photos.reduce( (result, o, i) => {
       if (!o.location) return result
 
       let m: sebmMarker = {
