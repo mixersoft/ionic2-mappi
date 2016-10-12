@@ -1,5 +1,5 @@
 import { NgModule } from '@angular/core';
-import { AgmCoreModule } from 'angular2-google-maps/core/core-module';
+import { AgmCoreModule } from 'angular2-google-maps/core';
 import { IonicApp, IonicModule, Platform } from 'ionic-angular';
 
 

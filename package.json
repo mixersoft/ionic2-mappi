@@ -23,7 +23,7 @@
     "lodash-es": "^4.16.2"
   },
   "devDependencies": {
-    "@ionic/app-scripts": "^0.0.23",
+    "@ionic/app-scripts": "0.0.30",
     "@types/google-maps": "3.1.28",
     "@types/lodash": "4.14.36",
     "typescript": "^2.0.3"
@@ -38,6 +38,9 @@
     "cordova-plugin-statusbar",
     "ionic-plugin-keyboard"
   ],
+  "config": {
+    "ionic_rollup": "./scripts/rollup.config.js"
+  },
   "cordovaPlatforms": [
     "ios",
     {

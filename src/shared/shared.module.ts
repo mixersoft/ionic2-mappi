@@ -10,7 +10,7 @@ import { NameListService } from './name-list/index';
 import { CameraRollWithLoc } from './camera-roll/index';
 import { GeoJsonPoint, isGeoJson } from './camera-roll/index';
 
-import { AgmCoreModule } from 'angular2-google-maps/core/core-module';
+import { AgmCoreModule } from 'angular2-google-maps/core';
 
 /**
  * Do not specify providers for modules that might be imported by a lazy loaded module.
@@ -32,7 +32,7 @@ import { AgmCoreModule } from 'angular2-google-maps/core/core-module';
   exports: [
     // ToolbarComponent, NavbarComponent,
     MapGoogleComponent,
-    CommonModule, 
+    CommonModule,
     // FormsModule, RouterModule
   ]
 })
