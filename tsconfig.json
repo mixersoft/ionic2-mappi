@@ -10,16 +10,11 @@
     ],
     "module": "es2015",
     "moduleResolution": "node",
-    "sourceMap": true,
-    "pretty": true,
     "target": "es5"
   },
-  "filesGlob": [
-    "**/*.ts",
-    "!node_modules/**/*"
-  ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/*.spec.ts"
   ],
   "compileOnSave": false,
   "atom": {

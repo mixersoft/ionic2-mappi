@@ -1,8 +1,20 @@
-/// <reference path="./mappi-marker-clusterer.d.ts" />
+import 'js-marker-clusterer';
 import { Subject } from 'rxjs/Subject';
-import { MarkerClusterer, ClusterIcon } from 'js-marker-clusterer';
+import 'rxjs/Rx';
+// import { jmcCluster, MarkerClustererService } from "./marker-clusterer.service";
 
 declare var google;
+
+export declare class MarkerClusterer {
+  constructor(map: any, opt_markers?: any, opt_options?: any);
+  map_: any;
+  markers_: any[];
+  clusters_: any[];
+  ready_: boolean;
+  addMarkers(markers: any[], opt_nodraw: boolean) : void;
+  removeMarker(marker: any, opt_nodraw: boolean) : boolean;
+  removeMarkers(markers: any[], opt_nodraw: boolean) : boolean;
+}
 
 export class MappiMarkerClusterer extends MarkerClusterer {
 
@@ -54,11 +66,19 @@ export class MappiMarkerClusterer extends MarkerClusterer {
   private _triggerClustersChanged(){
     this._debounce_MarkerClustersChange && this._debounce_MarkerClustersChange.next()
   }
+
+}
+
+
+
+declare class ClusterIcon {
+  triggerClusterClick():void;
 }
 
 // we need to override the method in the base class
-ClusterIcon.prototype.triggerClusterClick0 = ClusterIcon.prototype.triggerClusterClick;
+const triggerClusterClick0 = ClusterIcon.prototype.triggerClusterClick;
 ClusterIcon.prototype.triggerClusterClick = function(...args: any[]){
-  this.triggerClusterClick0.apply(this, args);
+  // console.info("ClusterIcon.triggerClusterClick() [cluster,map]=", this.cluster_, this.map_);
   google.maps.event.trigger(this.map_, 'clusterclick', this.cluster_);
+  triggerClusterClick0.apply(this, args);  
 }

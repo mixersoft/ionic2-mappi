@@ -4,7 +4,7 @@
   "homepage": "http://ionicframework.com/",
   "private": true,
   "scripts": {
-    "build": "ionic-app-scripts build --dev",
+    "build": "ionic-app-scripts build --dev --debug",
     "watch": "ionic-app-scripts watch",
     "serve:before": "watch",
     "emulate:before": "build",
@@ -23,7 +23,7 @@
     "lodash-es": "^4.16.2"
   },
   "devDependencies": {
-    "@ionic/app-scripts": "0.0.30",
+    "@ionic/app-scripts": "0.0.36",
     "@types/google-maps": "3.1.28",
     "@types/lodash": "4.14.36",
     "typescript": "^2.0.3"
