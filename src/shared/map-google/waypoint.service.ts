@@ -5,10 +5,12 @@ import _ from "lodash";
 import { Observable } from 'rxjs/Observable';
 import 'rxjs/Rx';
 
-import { googleMapsReady, sebmMarker, uuidMarker } from "./map-google.component";
-import { ExtendedGoogleMapsAPIWrapper as GMaps } from "./extended-google-maps-api-wrapper";
 
-let Google : any = undefined;
+import { googleMapsReady, sebmMarker, UuidMarker, UuidMarkerFactory } from "./map-google.component";
+import { ExtendedGoogleMapsAPIWrapper as GMaps } from "./extended-google-maps-api-wrapper";
+import { GoogleDirectionsResult, poi } from "./google-directions-result.service";
+// refactor, move this to LocationHelper
+import {distanceBetweenLatLng} from  "../camera-roll/camera-roll.service";
 
 export interface directionsRequest {
   travelMode: string;     // 'WALKING'
@@ -18,30 +20,41 @@ export interface directionsRequest {
   waypoints?: Array<{location:any, stopover:boolean}> // any[];
 }
 
-function _isSebmMarkers(o: uuidMarker[] | sebmMarker[]) : o is sebmMarker[] {
-  return !( o.length && (o[0]).hasOwnProperty('setMap') );
+export interface waypointDetail {
+  uuid: string;
+  lat: number;
+  lng: number;
+  address: string;
+  // google.maps.DirectionsResult geocode result
+  geocode?: {place_id:string, geocoder_status:string, type:string[]};
+}
+
+function _isSebmMarkers(o: UuidMarker[] | sebmMarker[]) : o is sebmMarker[] {
+  console.warn("Is google.maps.Marker=", o instanceof google.maps.Marker)
+  return !( o.length && o[0]['setMap'] );
 }
 
 @Injectable()
 export class WaypointService {
-  map: GoogleMap;
+  map: google.maps.Map;
   apiEndpoint: string = "http://maps.googleapis.com/maps/api/directions/json?";
   sebmMarkers: sebmMarker[];
 
-  private _directionsDisplay : any;
-  private _directionsService : any;
-  private _route$ : ()=>Observable<{}>;
+  private _directionsDisplay : google.maps.DirectionsRenderer;
+  private _directionsService : google.maps.DirectionsService;
+  private _route$ : (directionsRequest) => Observable<{ 'status': any; 'result': any; }>
+
+  /**
+   * NOTE: sebmMarkers uses sebm GoogleMapTypes, 
+   *  js-marker-clusterer uses googlemaps types from google.maps namespace
+   */
+  static sebmMap2GoogleMap( sebmMap:GoogleMap ) : google.maps.Map {
+    return (sebmMap as any) as google.maps.Map;
+  }
 
   static instance : any = {
     service: undefined,
     renderer: undefined,
-  }
-
-  static isVisible(
-    map : GoogleMap  // ???: use MapGoogleComponent?
-  ) : boolean {
-    let directionsDisplay = map['_directionsDisplay'] || WaypointService.instance.renderer
-    return directionsDisplay && !!directionsDisplay.getMap();
   }
 
   static displayRoute(response: any, panelId?: string, directionsDisplay?: any) {
@@ -52,192 +65,211 @@ export class WaypointService {
     }
   }
 
-  static clearRoutes(
-    map? : GoogleMap
-  ) {
-    let directionsDisplay = map['_directionsDisplay'] || WaypointService.instance.renderer
-    if (directionsDisplay) {
-      directionsDisplay.setMap(null);
-      directionsDisplay.setPanel(null);
-    }
-  }
   /**
-   * [calculateAndDisplayRoute description]
-   * @param  {route}        route
-   * @param  GoogleMap       map               new Google.maps.Map
-   * @param  uuidMarker[] | sebmMarker[] markerArray       Array<Google.maps.Marker>
-   * @param  {any}          directionsDisplay new Google.maps.DirectionsRenderer
-   * @param  {any}          directionsService new Google.maps.DirectionsService
-   * @param  {any}          stepDisplay       new Google.maps.InfoWindow;
+   * Lookup additional details from route, indexed by waypoint.uuid. Use to link
+   * additional details to Marker rendering by Marker.uuid 
+   * NOTE: requires a uuid key for each waypoint submitted to google.maps.DirectionsService
    */
-  static calculateAndDisplayRoute(
-    route: directionsRequest
-    , map : GoogleMap
-    , markerArray : uuidMarker[] | sebmMarker[]     // "in out" param
-    , onComplete? : (err:any, result:any)=>void
-    , getInfoWindow?: (i: number, content: string) => string  // cameraRoll
-    , directionsService? : any
-    , directionsDisplay? : any
-    , stepDisplay? : any
-  ) {
-
-    if (!directionsDisplay){
-      directionsDisplay = map['_directionsDisplay']
-        || WaypointService.instance.renderer
-        || (WaypointService.instance.renderer = GMaps.createDirectionsRenderer(map));
-      map['_directionsDisplay'] = directionsDisplay;  // stash
-    }
-    if (!directionsService)
-      directionsService = WaypointService.instance.service ||
-        (WaypointService.instance.service = GMaps.createDirectionsService());
-
-    // First, remove any existing markers from the map.
-    if (_isSebmMarkers(markerArray)) {
-      markerArray.length = 0;   // clear and reuse array
-      console.warn("calculateAndDisplayRoute() is modifiying markerArray as inout param!!!")
-    } else
-      markerArray.forEach( m => m.setMap(null));
-
-    // Retrieve the start and end locations and create a DirectionsRequest using
-    // WALKING directions.
-    const routeOpt : directionsRequest = {
-      'travelMode': 'WALKING',
-      'optimizeWaypoints': true,
-      origin: null,
-      destination: null,
-      waypoints: [],
-    }
-    Object.assign(routeOpt, route);
-    directionsService.route(
-      routeOpt
-      , (response: any, status: string) => {
-        // Route the directions and pass the response to a function to create
-        // markers for each step.
-        if (status === 'OK') {
-          directionsDisplay.setOptions({
-            'suppressMarkers': true,
-            'preserveViewport': true
-          });
-          directionsDisplay.setDirections(response);
-          directionsDisplay.setMap(map);
-          WaypointService.showSteps(response, markerArray, map, stepDisplay, getInfoWindow);
-          if (onComplete) onComplete(null, response)
-        } else {
-          window.alert('Directions request failed due to ' + status);
-        }
+  static getRouteDetailsByWaypointUuid = function(routeResult: google.maps.DirectionsResult, routeIndex:number = 0 ): {[key:string]:waypointDetail} {
+    const request = routeResult['request']; 
+    let order : number[];
+    order =  request.optimizeWaypoints
+      ? routeResult.routes[routeIndex].waypoint_order
+      : request.waypoints
+    let waypoints : waypointDetail[] 
+    waypoints = order.map(
+      (o:any)=>{
+        if (typeof o == "number") o = request.waypoints[o];
+        if (!o.uuid) console.warn("WARN: uuid not found for waypoint=", o);
+        return o.location
       }
-    );
-  }
-
-  static showSteps(
-    directionsServiceResponse : any
-    , markerArray : uuidMarker[] | sebmMarker[]
-    , map : GoogleMap
-    , stepDisplay? : any
-    , getInfoWindow?: (i: number, content: string) => string
-  ) : uuidMarker[] | sebmMarker[] {
-    // For each step, place a marker, and add the text to the marker's infowindow.
-    // Also attach the marker to an array so we can keep track of it and remove it
-    // when calculating new routes.
-
-    if ( _isSebmMarkers(markerArray) ) markerArray.length = 0;  // clear and reuse array
-
-    const route = directionsServiceResponse.routes[0];
-    if (directionsServiceResponse.routes.length > 1)
-      console.warn(`showSteps() Warning: only using first route, total routes=${directionsServiceResponse.routes.length}`)
-    const legs = route.legs;
-
-    legs.forEach( (leg:any, i:number) => {
-      // leg.steps.forEach( (step:any,i:number,list:any)=>{
-        if ( _isSebmMarkers(markerArray) ){
-          let infoContent: string;
-          // infoContent = leg.step[0].instructions;       // infoWindow
-          infoContent = leg.start_address;       // infoWindow
-          if (getInfoWindow)
-            infoContent = getInfoWindow(i, infoContent)
-
-          const sebm = {
-            lat: leg.steps[0].start_location.lat(),
-            lng: leg.steps[0].start_location.lng(),
-            draggable: false,
-            label: `${i}`,
-            detail: infoContent
-          }
-          markerArray.push( sebm )
-          return
-        } else {
-          // using google.maps.Markers
-          const marker = markerArray[i]
-            || GMaps.createMarker(map);
-          marker.setMap(map);
-          marker.setPosition(leg.steps[0].start_location);
-          // attachInstructionText(
-          //   stepDisplay, marker, step.instructions, map
-          // )
-        };
-      // });
-    });
-
-    return markerArray
+    )
+    waypoints.unshift(request.origin);
+    waypoints.push(request.destination);
+    // merge with geocode results
+    if (routeResult['geocoded_waypoints']){
+      waypoints.forEach(
+        (o,i)=>{
+          if (routeResult['geocoded_waypoints'][i].geocoder_status == "OK")
+            o['geocode']=routeResult['geocoded_waypoints'][i]
+        }
+      )
+    }
+    // merge with leg results
+    const legs = routeResult.routes[routeIndex].legs;
+    legs.forEach(
+      (o,i,l)=>{
+        waypoints[i].address = o.start_address
+        if (i == l.length-1)
+          waypoints[i+1].address = o.end_address
+      }
+    )
+    return _.keyBy(waypoints, 'uuid')
   }
 
   constructor(
     public http: Http
     // , @Inject(APP_CONFIG) appConfig: any       // this does NOT work
   ) {
+    // wait for GoogleMapsReady before we initialize, see this.bind() 
   }
 
-  bind (o: googleMapsReady, sebmMarkers: sebmMarker[]) {
-    this.map = o.map;
+  bind (o: googleMapsReady, sebmMarkers: sebmMarker[], mapPanelId?: string) {
+    // use @types/googlemaps
+    this.map = WaypointService.sebmMap2GoogleMap(o.map);
     this.sebmMarkers = sebmMarkers;
-    Google = o.google;
-    // this._directionsDisplay = new Google.maps.DirectionsRenderer;
 
-    this._directionsService = GMaps.createDirectionsService();
-    this._directionsDisplay = GMaps.createDirectionsRenderer(this.map);
+    this._directionsService = new google.maps.DirectionsService();
+    // const options: google.maps.DirectionsRendererOptions = { map: this.map};
+    this._directionsDisplay = new google.maps.DirectionsRenderer();
+
+    if (mapPanelId){
+      // TODO: make this more angular2 friendly, don't use DOM / HTMLElement.id
+      const el = document.getElementById(mapPanelId);
+      this._directionsDisplay.setPanel( el );
+    }
+
+    // Observables
+    this._route$ = Observable.bindCallback(
+      this._directionsService.route
+      , (resp, status)=>{ return {'status':status, 'result':resp} }
+    )
 
   }
 
-  buildRoute () {
+  isVisible() : boolean {
+    const directionsDisplay = this._directionsDisplay;
+    const isVisible : boolean = directionsDisplay && !!directionsDisplay.getMap();
+    console.info("waypoint, isVisible=", isVisible)
+    return isVisible;
   }
 
-  getRoute (route: any, markers: sebmMarker[]) {
-    const defaults = { 'travelMode': 'WALKING' };
-    route = Object.assign(defaults, route);
-    this.sebmMarkers = markers;               // bind again...
-    WaypointService.calculateAndDisplayRoute(
-      route
-      , this.map
-      , this.sebmMarkers     // "in out" param
-      , this._directionsService
-      , this._directionsDisplay
-      , undefined
+  clearRoutes() {
+    const directionsDisplay = this._directionsDisplay;
+    if (directionsDisplay) {
+      directionsDisplay.setMap(null);
+      directionsDisplay.setPanel(null);
+    }
+  }
 
+  getRoute (routeReq: directionsRequest) : Promise<google.maps.DirectionsResult> {
+    const defaults = { 
+      'travelMode': 'WALKING',
+      'optimizeWaypoints': true,
+      origin: null,
+      destination: null,
+      waypoints: [],
+    };
+
+    const route$ = this._route$   // Observable.bindCallback() in bind()
+
+    routeReq = Object.assign(defaults, routeReq);
+    return route$( routeReq )
+    // .subscribe(
+    .toPromise()
+    .then(
+      (resp:any)=>{
+        if (resp.status == 'OK'){
+          return resp.result
+        } else
+          Promise.reject(resp.result)
+      }
     )
   }
 
-  getRoute$ (route: any) {
-    const defaults = { 'travelMode': 'WALKING' };
-    route = Object.assign(defaults, route);
-    let route$ = Observable.bindCallback(
-      this._directionsService.route
-      , (res, status)=>{res, status}
-    );
-    // route$( route ).subscribe(
-    //   (resp:any)=>{
-    //     if (resp.status == 'OK')
-    //       this.displayRoute(resp.res);
-    //     else
-    //       this.handleError(resp.res)
-    //   }
-    // )
+  renderRoute( routeResult: google.maps.DirectionsResult
+    , dirPanelId?: string
+    , getLabelForStep?:(i:number, content: string) => string 
+  ) {
+
+    console.warn(`renderRoute, routeResult=`, routeResult)
+    const directions = routeResult;
+
+    // extras
+    const gdResult = new GoogleDirectionsResult(routeResult);
+    const pois = gdResult.getPOIs();
+    console.warn("route POIs=", pois);
+
+    const directionsDisplay = this._directionsDisplay;
+    directionsDisplay.setOptions({
+      'suppressMarkers': true,
+      'preserveViewport': true
+    });
+    
+    directionsDisplay.setMap(this.map);
+    if (dirPanelId) {
+      // update directions Panel
+      const curPanel = directionsDisplay.getPanel()
+      // Hack: uses DOM directly
+      const el = document.getElementById(dirPanelId);
+      if (el && !(curPanel && curPanel.id != dirPanelId))
+        directionsDisplay.setPanel( el );
+    }
+    directionsDisplay.setDirections(routeResult);
+    return routeResult
   }
 
-  displayRoute(response: any) {
-    this._directionsDisplay.setDirections(response);
+  updateWaypointMarkers( routeResult: google.maps.DirectionsResult
+    , markers:  UuidMarker[] | sebmMarker[]
+    , getLabelForStep?:(i:number, content: string) => string
+  ) {
+
+    if (!getLabelForStep) getLabelForStep = (i,content)=>content;
+
+    console.info("routeResult", routeResult);
+    const routeDetails = WaypointService.getRouteDetailsByWaypointUuid(routeResult);
+    console.log("routeDetails", routeDetails);
+    // TODO: save to MarkerService
+    if ( _isSebmMarkers(markers) ) {
+      console.info("SebmMarkers", markers)
+      markers.forEach(
+        (m,i)=>{
+          const found = routeDetails[m.uuid]
+          if (found){
+            m.detail = getLabelForStep(i, found.address);
+            m['label'] = `${i}`; 
+          }
+        }
+      )
+    } else {
+      // from jsMarkerClusterer
+      markers = markers as UuidMarker[]
+      console.info("UuidMarkers", markers)
+      markers.forEach(
+        (m,i)=>{
+          const found = routeDetails[m.uuid]
+          if (found){
+            // this adds the UuidMarker to the map, outside the ClusterIcon
+            m.setPosition(found);
+            m.setTitle(getLabelForStep(i, found.address));
+            m.setLabel(`${i}`);
+            console.log(`UuidMarker, i=${i}, map=`, m.getMap());
+            // add InfoWindow to UuidMarker
+          } else {
+            throw new Error("UuidMarker NOT FOUND for route mapped from Cluster. was the marker moved off the map?")
+          }
+        }
+      )
+    }
+
+    const XXX_findSebmMarkerByLeg = function(markers: sebmMarker[], leg: any, waypointOpt?: directionsRequest): sebmMarker {
+      const stepLocation = leg.steps[0].start_location as google.maps.LatLng;
+      const foundMarker = _.find( markers, (o,i)=>{
+        const markerLoc = new google.maps.LatLng(o.lat, o.lng);
+        // return stepLocation.equals(markerLoc)
+        const distM = distanceBetweenLatLng(stepLocation, markerLoc)
+        console.log(`update SebmMarker, index=${i}, distance=${distM}`)
+        return distM < 10 // within 10 meters
+      });
+      if (!foundMarker) {
+        console.warn("SebmMarker not found for step=", leg.start_address);
+      }
+      return foundMarker;
+    }
+
   }
 
-  handleError(error: any) {
+  handleError(error: any) : any {
     console.error(error);
     return Observable.throw(error.json().error || 'Server error');
   }

@@ -50,8 +50,8 @@ export class HeatmapService {
     }
   }
 
-  render (points: GeoJson[]) {
-    if (!this.map) return;
+  render (points: GeoJson[]) : Promise<void> {
+    if (!this.map) return Promise.resolve();
 
     let heatmapData = points.map( o => {
       let [lng, lat] = o.coordinates;
@@ -73,5 +73,6 @@ export class HeatmapService {
       });
       this.toggleVisible(true);
     }
+    return Promise.resolve();
   }
 }

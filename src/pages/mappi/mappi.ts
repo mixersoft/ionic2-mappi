@@ -65,6 +65,8 @@ export class renderPhotoForView implements PipeTransform {
   }
 }
 
+let _photos : cameraRollPhoto[] = [];
+
 @Component({
   templateUrl: 'mappi.html'
   , providers: [ DestinationService ]
@@ -111,7 +113,7 @@ export class MappiPage {
         this.destinations = results;
         const initialLocation = _.find(this.destinations, {label:'Sofia'}); 
         this.getMap( initialLocation, true)
-        // triggers: mapBoundsChange() > getPhotos() > this.photos
+        // triggers: mapBoundsChange() > getPhotos() > _photos
       }      
     )
   }
@@ -120,24 +122,16 @@ export class MappiPage {
     console.warn(`>>> ngAfterViewInit, names=${this.destinations}`)
   }
 
-  ngOnChanges(changes: SimpleChanges) : void {
-    // changes.prop contains the old and the new value...
-    if (changes['viz']) {
-      // change map visualization
-      console.info("// change map visualization");
-    }
-  }
-
 
   /**
    * Event Handlers
    */
 
   mapBoundsChange(contains: mapContainsFn) {
-    console.warn(`0: MappiPage.mapBoundsChange(), photos=${this.photos.length}`);
+    console.warn(`0: MappiPage.mapBoundsChange(), photos=${_photos.length}`);
     this.getPhotos(contains, 999)
     .then( photos=>{
-      // this.photos = photos;
+      _photos = photos;     // for showRoute()
       this._mapCtrl.renderMapVizChange(photos)
       return
     })
@@ -145,7 +139,8 @@ export class MappiPage {
 
 
   markerClick(uuids: string[]) {
-    let data = this.photos.filter( o => _.includes(uuids, o.uuid)  );
+    console.log(`MappiPage.markerClick(), marker.uuids= ${uuids}`)
+    let data = _photos.filter( o => _.includes(uuids, o.uuid)  );
     data = _.sortBy(data, 'localTime');
     // this.selecteds.length = 0;  // empty array
     const PREVIEW_COUNT = this.cameraRoll.isCordova ? 3 : 1;
@@ -153,7 +148,7 @@ export class MappiPage {
     this.selecteds = (preferImages.length >= PREVIEW_COUNT) 
       ? preferImages.slice(0,PREVIEW_COUNT)
       : data.slice(0,PREVIEW_COUNT);
-    // this.selecteds = _.filter(data, {mediaType: mediaType.Image}).slice(0,PREVIEW_COUNT);
+    this.selecteds = _.filter(data, {mediaType: mediaType.Image}).slice(0,PREVIEW_COUNT);
     // console.warn(`markerClick, selected=${_.map(this.selecteds, 'filename')}`);
   }
 
@@ -163,11 +158,11 @@ export class MappiPage {
   resetMap(){
     if (this.show.heatMap) this.toggleHeatmap()
     if (this.show.clusterMap) this.toggleClusterer()
-    if (this.show.markers) this.showMarkers([])
+    if (this.show.markers) this.toggleMarkers()
     // this._mapCtrl.showRoute() toggles route & directions panel
     // reset details
     // TODO: listen to reset event?
-    this.photos = [];
+    _photos = [];
     this.selecteds = undefined;
   }
 
@@ -233,41 +228,16 @@ export class MappiPage {
           descending: false
         }])
 
-      let myPhotos = this.cameraRoll.getPhotos(limit)
-      console.warn( `MappiPage.getPhotos(), filtered count=${myPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
-      return myPhotos;
+      let cameraRollPhotos = this.cameraRoll.getPhotos(limit)
+      console.warn( `MappiPage.getPhotos(), filtered count=${cameraRollPhotos.length}, filter keys=${Object.keys(filterOptions)}` );
+      return cameraRollPhotos;
     })
   }
 
   toggleMarkers() {
     this.viz = (this.viz == mapViz.Markers) ? mapViz.None : mapViz.Markers;
     return
-
-    // this.show.markers = !this.show.markers
-    // let data : cameraRollPhoto[] = this.show.markers ? this.photos : []
-    // this.showMarkers( data )
   }
-  // showMarkers( photos: cameraRollPhoto[], limit: number = 20 ) {
-  //   // render markers for current value of this.photos
-  //   console.warn(`MappiPage: showMarkers(), photos=${photos.length}`);
-  //   let sebmMarkers : sebmMarker[] = photos.reduce( (result, o, i) => {
-  //     if (!o.location) return result
-
-  //     let m: sebmMarker = {
-  //       lat: o.location.latitude(),
-  //       lng: o.location.longitude(),
-  //       uuid: o.uuid,
-  //       detail: `${o.filename}`,
-  //       draggable: false
-  //     }
-  //     result.push(m);
-  //     return result;
-  //   }, [] as sebmMarker[]);
-  //   // update marker labels
-  //   sebmMarkers.forEach( (m, i)=> m.label = String.fromCharCode(97 + i) );
-
-  //   this._mapCtrl.render(sebmMarkers, 'markers', limit);
-  // }
 
 
 
@@ -275,37 +245,21 @@ export class MappiPage {
   toggleHeatmap(){
     this.viz = (this.viz == mapViz.HeatMap) ? mapViz.None : mapViz.HeatMap;
     return
-
-    // this.show.heatMap = !this.show.heatMap
-    // let data : cameraRollPhoto[] = this.show.heatMap ? this.photos : []
-    // this.showHeatmap( data )
   }
-  // showHeatmap( photos: cameraRollPhoto[] , limit: number = 99 ) {
-  //   let data = photos.filter( Boolean ).map( o => o.location );
-  //   this._mapCtrl.render(data, 'heatmap', limit);
-  //   this.show.clusterMap = false;
-  // }
 
   toggleClusterer() {
     this.viz = (this.viz == mapViz.ClusterMap) ? mapViz.None : mapViz.ClusterMap;
     return
-
-    // this.show.clusterMap = !this.show.clusterMap
-    // let data : cameraRollPhoto[] = this.show.clusterMap ? this.photos : []
-    // this.showClusterer( data )
   }
-  // showClusterer( photos: cameraRollPhoto[] , limit: number = 999 ) {
-  //   this._mapCtrl.render(photos, 'marker-cluster', limit);
-  //   this.show.heatMap = false;
-  // }
+
 
   showRoute( photos?: cameraRollPhoto[] , limit: number = 10 ) {
     let isRouteShown: boolean;
-    if (this.show.markers) {
-      photos = CameraRollWithLoc.sortPhotos(photos || this.photos);
-      photos = photos.slice(0,limit);
+    if (this.viz == mapViz.Markers) {
+      photos = CameraRollWithLoc.sortPhotos(photos || _photos);
+      // photos = photos.slice(0,limit);
       isRouteShown = this._mapCtrl.showRoute(photos);
-    } else if (this.show.clusterMap) {
+    } else if (this.viz == mapViz.ClusterMap) {
       isRouteShown = this._mapCtrl.showRoute();
     }
   }

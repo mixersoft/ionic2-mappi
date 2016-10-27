@@ -8,7 +8,9 @@ import 'rxjs/Rx';
 
 // import { SebmGoogleMap, SebmGoogleMapMarker, SebmGoogleMapInfoWindow } from 'angular2-google-maps/core/directives';
 import { GoogleMapsAPIWrapper } from 'angular2-google-maps/core/services'
-import { GoogleMap, LatLng, LatLngBounds, Marker, MouseEvent } from 'angular2-google-maps/core/services/google-maps-types'
+import { GoogleMap, LatLng, LatLngBounds, 
+  Marker, MarkerOptions, MouseEvent 
+} from 'angular2-google-maps/core/services/google-maps-types'
 
 import { GeoJson, GeoJsonPoint, isGeoJson } from "../camera-roll/location-helper";
 import {
@@ -36,10 +38,24 @@ export interface googleMapsReady {
 }
 
 // new google.maps.Marker for MarkerClusterer
-// TODO: convert to use sebmMarker
-export interface uuidMarker extends Marker {
+export interface UuidMarker extends google.maps.Marker {
   uuid: string;
 }
+
+/**
+ * Hack: "extend" google.maps.Marker to include uuid property
+ *  guard with this.ready.then() to ensure google.maps is loaded
+ */
+export function UuidMarkerFactory(uuid: string, options?: google.maps.MarkerOptions) : Promise<UuidMarker> {
+  // OR, guard for google.maps
+  return this.ready.then( ()=>{
+    let gmOptions = options as any as google.maps.MarkerOptions;
+    const marker = new google.maps.Marker( gmOptions );
+    marker['uuid'] = uuid;
+    return marker as any as UuidMarker;
+  })
+}
+
 
 // for use with <sebm-google-map-marker>
 export interface sebmMarker {
@@ -53,11 +69,11 @@ export interface sebmMarker {
 }
 
 /**
- * create SebmMarker object from google.maps.Marker with extra uuid property
- * @param  {uuidMarker} marker [description]
+ * create SebmMarker object from UuidMarker or google.maps.Marker with extra uuid property
+ * @param  {UuidMarker} marker [description]
  * @return {sebmMarker}        [description]
  */
-export function getSebmMarker(marker: uuidMarker) : sebmMarker {
+export function getSebmMarker(marker: UuidMarker | google.maps.Marker) : sebmMarker {
   const m = marker as any;
   const sebm : any = {
     'lat': m.position.lat(),
@@ -195,7 +211,7 @@ export class MapGoogleComponent {
       .then( (resp: googleMapsReady)=>{
         this._markerClusterer.bind(resp);
         this._heatmap.bind(resp);
-        this._waypoint.bind(resp, this.sebmMarkers);
+        this._waypoint.bind(resp, this.sebmMarkers, 'map-panel');
       })
     })
     .then( ()=>{
@@ -211,13 +227,13 @@ export class MapGoogleComponent {
     this._debounce_MapBoundsChange
       .debounceTime(500)
       .subscribe( value=>{
-        // console.warn(`_debounce_MapBoundsChange( ${value} )`)
+        if (!this._googMap) return
         if (this._isMapChanging) {
           console.warn("surpress mapBoundsChange until isMapChanging==false")
           return
         }
         this._isMapChanging = true;
-        console.info(`## Map.mapBoundsChange.emit(), this.isMapChanging=${this._isMapChanging }`)
+        // console.info(`## Map.mapBoundsChange.emit(), this.isMapChanging=${this._isMapChanging }`)
         // listen for _debounce_MapOverlayRenderComplete.next() and debounce
         this.mapBoundsChange.emit( this.getMapContainsFn( value )  )
       });
@@ -226,15 +242,17 @@ export class MapGoogleComponent {
     this._debounce_MapOverlayRender
       .debounceTime(100)
       .subscribe( (change)=>{
-        console.info(`>>>> Map._debounce_MapOverlayRender, this.isMapChanging=${this._isMapChanging }`)
+        if (!this._googMap) return
+        console.info(`>>>> Map._debounce_RenderMapVizChange, this.isMapChanging=${this._isMapChanging }`)
         this.renderMapVizChange(change);
       })
     
     this._debounce_MapOverlayRenderComplete
       .debounceTime(500)
       .subscribe( (viz)=>{
+        if (!this._googMap) return
         this._isMapChanging = false;
-        console.info(`## Map._debounce_MapOverlayRenderComplete, viz=${viz}, this.isMapChanging=${this._isMapChanging }`)
+        // console.info(`## Map._debounce_MapOverlayRenderComplete, viz=${viz}, this.isMapChanging=${this._isMapChanging }`)
       })
   }
 
@@ -270,6 +288,7 @@ export class MapGoogleComponent {
   waitForGoogleMaps() : Promise<googleMapsReady> {
     return new Promise<googleMapsReady>( (resolve, reject)=>{
       this.ready.then( (map: GoogleMap)=> {
+        // TODO: use @types/googlemaps namespace=google.maps
         Google = (window as WindowWithGoogle).google;
         resolve({
           google: Google,
@@ -287,8 +306,14 @@ export class MapGoogleComponent {
     return Observable.fromPromise(this.waitForGoogleMaps());
   }
 
-
-
+  UuidMarkerFactory(uuid: string, options?: google.maps.MarkerOptions) : Promise<UuidMarker> {
+    return this.ready.then( ()=>{
+      let gmOptions = options as any as google.maps.MarkerOptions;
+      const marker = new google.maps.Marker( gmOptions );
+      marker['uuid'] = uuid;
+      return marker as any as UuidMarker;
+    })
+  }
 
   onIdle(){
     // use as mapReady event
@@ -361,9 +386,9 @@ export class MapGoogleComponent {
    */
 
   onClusterClick(cluster: any){
-    // console.log(cluster);
-    const uuids : string[] = cluster.markers_.map( (m:any) => m['uuid']);
-    // console.log(`onClusterClick: ${uuids}`)
+    console.log("MapGoogleComponent.onClusterClick()", cluster);
+    const uuids : string[] = cluster.getMarkers().map( m => m['uuid']);
+    console.log(`MapGoogleComponent.onClusterClick(), marker.uuids= ${uuids}`)
     this.markerClick.emit( uuids );
   }
 
@@ -375,8 +400,7 @@ export class MapGoogleComponent {
       case 'centerChange': value = [value.lat, value.lng]; break;
       case 'boundsChange':
         // bubble up
-        this.waitForGoogleMaps()
-        .then( ()=>this._debounce_MapBoundsChange.next( value ) );
+        this._debounce_MapBoundsChange.next( value );
         break;
     }
     // console.log(`${label}=${value}, zoom=${this.sebmGoogMap.zoom}`)
@@ -385,9 +409,10 @@ export class MapGoogleComponent {
   private _lastOpenIndex: number = -1;        // for closing last InfoWindow
   clickedMarker( data: any, index: number) {
     data['isOpen'] = true;
-    if (this._lastOpenIndex > -1) this.sebmMarkers[this._lastOpenIndex]['isOpen'] = false;
+    try {
+      if (this._lastOpenIndex > -1) this.sebmMarkers[this._lastOpenIndex]['isOpen'] = false;
+    } catch (err){}
     this._lastOpenIndex = index;
-
     // bubble up
     const uuid = this.sebmMarkers[index].uuid;
     this.markerClick.emit( [uuid] );
@@ -454,26 +479,28 @@ export class MapGoogleComponent {
     if (arg0 instanceof SimpleChange) {
       previousViz = arg0.previousValue;
       currentViz = arg0.currentValue;
+
+      // reset old map layer when viz changes
+      switch (previousViz) {
+        case mapViz.Markers:
+          this.sebmMarkers = [];
+          this._waypoint.clearRoutes();
+          break;
+        case mapViz.HeatMap:
+          this._heatmap.toggleVisible(false);
+          this._waypoint.clearRoutes();
+          break;
+        case mapViz.ClusterMap:
+          this._markerClusterer.toggleVisible(false);
+          this._waypoint.clearRoutes();
+          break;
+      }
+
     } else if (arg0 instanceof Array) {
       this._data = arg0;
       currentViz = this.viz || mapViz.None;
     }
 
-    // reset old map layer
-    switch (previousViz) {
-      case mapViz.Markers:
-        this.sebmMarkers = [];
-        WaypointService.clearRoutes(this._googMap);
-        break;
-      case mapViz.HeatMap:
-        this._heatmap.toggleVisible(false);
-        WaypointService.clearRoutes(this._googMap);
-        break;
-      case mapViz.ClusterMap:
-        this._markerClusterer.toggleVisible(false);
-        WaypointService.clearRoutes(this._googMap);
-        break;
-    }
 
     // render new map layer
     const photos = this._data;
@@ -481,20 +508,21 @@ export class MapGoogleComponent {
     switch (currentViz) {
       case mapViz.Markers:
         limit = 26;
+        const markers = Array.from(this.sebmMarkers);
         const sebmMarkers : sebmMarker[] = photos.slice(0,limit).reduce( (result, o, i) => {
           if (!o.location) return result
-          const m: sebmMarker = {
+          const found = _.find( markers, {uuid: o.uuid});
+          const m = {
             lat: o.location.latitude(),
             lng: o.location.longitude(),
             uuid: o.uuid,
-            detail: `${o.filename}`,
+            detail: found && found.detail || `${o.filename}`,
+            label: String.fromCharCode(97 + i),
             draggable: false
           }
           result.push(m);
           return result;
         }, [] as sebmMarker[]);
-        // update marker labels
-        sebmMarkers.forEach( (m, i)=> m.label = String.fromCharCode(97 + i) );
         // render markers using SebmGoogleMapMarker
         console.info(`renderMapVizChange() Markers, count=${photos.length}`)
         this.sebmMarkers = sebmMarkers;
@@ -505,127 +533,71 @@ export class MapGoogleComponent {
         this._heatmap.render(points)
         break;
       case mapViz.ClusterMap:
-        const markers : Marker[] = photos.slice(0,limit).reduce( (result, o, i)=>{
-          if (!o.location) return result;
-          const [lng,lat] = o.location.coordinates;
-          // TODO: can we modify the markerClusterer to use sebmMarkers?
-          // maybe add a callback for marker rendering?
-          let marker : uuidMarker = new Google.maps.Marker({
-            'position': new Google.maps.LatLng(lat,lng),
-            'title': o.filename,
-          });
-          marker['uuid'] = o.uuid;
-          result.push( marker );
-          return result;
-        }, [] );
-        this['_markerClustererPhotos'] = photos;  // for lookup
-        this._markerClusterer.render(markers)
+        const promises : Promise<UuidMarker>[] = photos
+          .slice(0,limit)
+          .reduce( (result, o, i)=>{
+            if (!o.location) return result;
+            const [lng,lat] = o.location.coordinates;
+            const pr = this.UuidMarkerFactory(o.uuid, {
+              'position': new Google.maps.LatLng(lat,lng),
+              'title': o.filename,
+            })
+            result.push(pr);
+            return result;
+          }, [] );
+        Promise.all(promises)
+        .then( markers=>{
+          // Hack:  for lookup
+          this['_markerClustererPhotos'] = photos; 
+          this._markerClusterer.render(markers)
+        })
         break;
     }
     this._debounce_MapOverlayRenderComplete.next(currentViz.toString());
   }
 
 
-  // render(data: any[], viz: string, limit: number = 99 ) {
-  //   this._isMapChanging = true;
-  //   // this._isMapChanging=false in  onIdle()
-  //   // let google : any = (window as WindowWithGoogle).google;
-  //   console.log(`render, zoom=${this.zoom}, map.zoom=${this._googMap.getZoom()}`)
-  //   switch ( viz ) {
-  //     case "markers":
-  //       if (data && data.length == 0) {
-  //         this.sebmMarkers = [];
-  //         WaypointService.clearRoutes(this._googMap);
-  //       } else {
-  //         let sebmMarkers = data as sebmMarker[];
-  //         this.sebmMarkers = sebmMarkers.slice(0,limit);
-  //       }
-  //       // this.onRefresh();
-  //       this._debounce_MapOverlayRenderComplete.next(viz);
-  //       break;
-
-  //     case "heatmap":
-  //       this.sebmMarkers = [];
-  //       this._markerClusterer.toggleVisible(false);
-
-  //       const points = data.slice(0,limit);
-  //       this._heatmap.render(points)
-  //       .then( ()=>{
-  //         if (this._heatmap.isVisible==false)
-  //           WaypointService.clearRoutes(this._googMap);
-  //         this._debounce_MapOverlayRenderComplete.next(viz);
-  //       });
-  //       break;
-
-  //     case "marker-cluster":
-  //       this.sebmMarkers = [];
-  //       this._heatmap.toggleVisible(false);
-
-  //       const photos: cameraRollPhoto[] = data;
-  //       const markers : Marker[] = photos.reduce( (result, o, i)=>{
-  //         if (!o.location) return result;
-  //         const [lng,lat] = o.location.coordinates;
-  //         // TODO: can we modify the markerClusterer to use sebmMarkers?
-  //         // maybe add a callback for marker rendering?
-  //         let marker : uuidMarker = new Google.maps.Marker({
-  //           'position': new Google.maps.LatLng(lat,lng),
-  //           'title': o.filename,
-  //         });
-  //         marker['uuid'] = o.uuid;
-  //         result.push( marker );
-  //         return result;
-  //       }, [] );
-  //       this['_markerClustererPhotos'] = photos;  // for lookup
-  //       this._markerClusterer.render(markers)
-  //       .then( ()=>{
-  //         if (this._markerClusterer.isVisible==false)
-  //           WaypointService.clearRoutes(this._googMap);
-  //         this._debounce_MapOverlayRenderComplete.next(viz);
-  //       });
-  //   }
-  // }
-
-
-  getRouteOptsFromClusters( clusters: jmcCluster[]) : directionsRequest {
+  getRouteOptsFromClusters( clusters: jmcCluster[]) : any {
     let waypointsOpt : any = {};
 
+    // Hack?
+    const _cache : { [key:string] : string} = {};
+    const cacheUuid = function (center: LatLng | string, uuid?: string) : string {
+      const key = typeof center == "string" ? center : center.toString();
+      if (center && uuid) {
+        return _cache[key] = uuid;
+      } else return _cache[key]
+    }
+
     clusters.forEach( (o: jmcCluster, i: number, l: any[])=>{
-      let firstMarker: uuidMarker = o['markers_'][0];
+      let firstMarker: UuidMarker = o['markers_'][0];
       let photos = this['_markerClustererPhotos'];    // hack
       let photo = photos.find( (o:cameraRollPhoto) => o.uuid==firstMarker.uuid );
       // TODO: groupPhotos() for clusters, and sort groups by time
-      //
+      // TODO: get cameraRollPhoto.uuid from waypoint.location
+      const clusterCenter = Object.assign({
+        lat: o.getCenter().lat(),
+        lng: o.getCenter().lng(),
+        uuid: firstMarker.uuid
+      });
+      cacheUuid(clusterCenter, photo.uuid);
+      cacheUuid(`${i}`, photo.uuid);  // also cache by waypoint index??
       if (i==0) {
-        waypointsOpt['origin'] = o.getCenter()
+        waypointsOpt['origin'] = clusterCenter
         return;
       }
       if (i==l.length-1) {
-        waypointsOpt['destination'] = o.getCenter()
+        waypointsOpt['destination'] = clusterCenter
         return;
       }
       waypointsOpt['waypoints'] = waypointsOpt['waypoints'] || []
       waypointsOpt['waypoints'].push({
-        location: o.getCenter(),
+        location: clusterCenter,
         stopover: true
       })
     })
+    // waypointsOpt['lookup_uuid'] = cacheUuid;
     return waypointsOpt;
-  }
-
-  showRouteFromMarkers(
-    waypointsOpt: directionsRequest,
-    onComplete?: (err:any, result:any)=>void
-  ){
-    this.sebmMarkers = this.sebmMarkers || [];
-
-    WaypointService.calculateAndDisplayRoute(
-      waypointsOpt
-      , this._googMap
-      , [] // no sebmMarkers
-      , (err, result)=>{
-        if (onComplete) onComplete(null, result)
-      }
-    );
   }
 
   getRouteOptsFromPhotos(photos: cameraRollPhoto[]) : directionsRequest {
@@ -638,18 +610,18 @@ export class MapGoogleComponent {
         p => _.pick(p, ['lat','lng']) as {lat:number, lng:number};
       if (i==0) {
         // waypointsOpt['origin'] = _.pick(m, ['lat','lng']);
-        waypointsOpt['origin'] = toLatLng(o)
+        waypointsOpt['origin'] = Object.assign(toLatLng(o), {uuid:o.uuid})
         return;
       }
       if (i==l.length-1) {
         // waypointsOpt['destination'] = _.pick(m, ['lat','lng']);
-        waypointsOpt['destination'] = toLatLng(o)
+        waypointsOpt['destination'] = Object.assign(toLatLng(o), {uuid:o.uuid})
         return;
       }
       waypointsOpt['waypoints'] = waypointsOpt['waypoints'] || []
       waypointsOpt['waypoints'].push({
         // location: _.pick(m, ['lat','lng']),
-        location: toLatLng(o),
+        location: Object.assign(toLatLng(o), {uuid:o.uuid}),
         stopover: true
       })
     });
@@ -686,71 +658,114 @@ export class MapGoogleComponent {
   /**
    * @return boolean, isRouteVisible
    */
-  showRoute(photos?: cameraRollPhoto[]) : boolean{
-    if (WaypointService.isVisible(this._googMap)) {
-      WaypointService.clearRoutes(this._googMap);
+  showRoute(photos?: cameraRollPhoto[]) : boolean {
+    if (this._waypoint.isVisible()) {
+      // # toggle route visibilty
+      this._waypoint.clearRoutes();
       return false;
     }
+
+    if (!photos) photos = this._data;
 
     // get directions for before/after locations
     // interface markers, not google.maps.Markers
     // use clusters
 
     let waypointsOpt : directionsRequest;
+    let routeMarkers : UuidMarker[] | sebmMarker[];
+    let getInfoForMarker : (i:number, content: string) => string;
+    let getPhotoForWaypoint : (point: sebmMarker | jmcCluster) => string;
+    let dirPromise: Promise<google.maps.DirectionsResult>;
+    
 
-    if (this._markerClusterer.isVisible) {
-      photos = photos || this['_markerClustererPhotos'];
-      const clusters : jmcCluster[] = this._markerClusterer.getVisibleClusters();
-      waypointsOpt = this.getRouteOptsFromClusters(clusters);
-      this.showRouteFromMarkers(
-        waypointsOpt,
-        (err, result) => this._routeOnComplete(result, clusters, photos)
-      );
-      return true
-    }
 
-    // use photos
-    if (photos.length <= 10) {
-      waypointsOpt = this.getRouteOptsFromPhotos(photos);
-    } else {
-      let grouped = CameraRoll.groupPhotos(photos);
-      let clusteredPhotos : cameraRollPhoto[] = [];
-      grouped.forEach( (v:any,k:string)=>{
-        let photo : cameraRollPhoto;
-        if ( v instanceof Array ) {
-          photo = v[0] as cameraRollPhoto;
-          photo['cluster'] = v;
-          photo['clusterSize'] = v.length;
-        } else {
-          photo = v;
+    const routeSource = this._markerClusterer.isVisible ? mapViz.ClusterMap : mapViz.Markers
+    switch (routeSource) {
+      case mapViz.ClusterMap:
+        // TODO: get photos from clusters
+        photos = this['_markerClustererPhotos'];
+        const clusters : jmcCluster[] = this._markerClusterer.getVisibleClusters();
+        waypointsOpt = this.getRouteOptsFromClusters(clusters);
+        getInfoForMarker = function(i:number, content: string) : string {
+          // i : index of leg[i], optimize waypoints
+          // content: leg.start_address
+          let prefix = '';
+          if (photos[i].hasOwnProperty('cluster'))
+            prefix = `${photos[i]['cluster'].length} photos taken at<br />`;
+          return prefix + content;
         }
-        clusteredPhotos.push(photo);
-      })
-      photos = clusteredPhotos.slice(0,10);
-      waypointsOpt = this.getRouteOptsFromPhotos(photos);
+        getPhotoForWaypoint = (o: jmcCluster) => o.getMarkers()[0].uuid;
+        // get first UuidMarker for each cluster
+        routeMarkers = clusters.map( o => o.getMarkers()[0] ) // UuidMarker[]
+        break;
+
+
+      case mapViz.Markers:
+        /**
+         * route for plain markers
+         */
+        if (photos.length <= 10) {
+          waypointsOpt = this.getRouteOptsFromPhotos(photos);
+          getPhotoForWaypoint = (o: sebmMarker) => o.uuid;
+          routeMarkers = this.sebmMarkers;
+        } else {
+          // cluster SebmMarkers
+          let grouped = CameraRoll.groupPhotos(photos);
+          let clusteredPhotos : cameraRollPhoto[] = [];
+          grouped.forEach( (v:any, k:string)=>{
+            let photo : cameraRollPhoto;
+            if ( v instanceof Array ) {
+              // shallow clone FIRST cameraRollPhoto in group/cluster
+              photo = Object.assign({}, v[0]) as cameraRollPhoto;
+              photo['$cluster'] = v;
+              photo['$clusterSize'] = v.length;
+            } else {
+              photo = v;
+            }
+            clusteredPhotos.push(photo);
+          });  // end forEach()
+
+          photos = clusteredPhotos
+          // this._data = photos = clusteredPhotos
+
+          // only create route for first 10 clusteredPhotos
+          waypointsOpt = this.getRouteOptsFromPhotos( photos.slice(0,10));
+          
+          getPhotoForWaypoint = (o: sebmMarker) => o.uuid;
+
+          const photoUuids = photos.map( o=>o.uuid );
+          routeMarkers = this.sebmMarkers.filter( m=>_.includes( photoUuids, m.uuid) );
+          this.sebmMarkers = routeMarkers; // reset sebmMarkers to grouped photos
+        }
+
+        getInfoForMarker = function(i:number, content: string) : string {
+          // i : index of leg[i], optimize waypoints
+          // content: leg.start_address
+          const markerContent = photos[i];
+          if (markerContent.hasOwnProperty('$clusterSize') && markerContent['$clusterSize'] > 1) 
+            return `${markerContent['$clusterSize']} photos taken at<br />${content}`;
+          else
+            return `${markerContent.filename} taken at<br />${content}`;
+        }
+        break;
     }
 
-    // window['sm'] = this.sebmMarkers;
-    this.sebmMarkers = this.sebmMarkers || [];
+    // reset Marker.label by index
+    (routeMarkers as any[]).forEach( (o:any, i: number) => o['label'] = String.fromCharCode(97 + i) );
 
-    const getLabel = function(i:number, content: string) : string {
-      let prefix = '';
-      if (photos[i].hasOwnProperty('cluster'))
-        prefix = `${photos[i]['cluster'].length} photos taken at<br />`;
-      return prefix + content;
-    }
-    WaypointService.calculateAndDisplayRoute(
-      waypointsOpt
-      , this._googMap
-      , this.sebmMarkers
-      , (err, result)=>{
-        let gdResult = new GoogleDirectionsResult(result);
-        WaypointService.displayRoute( gdResult.getResult(), 'map-panel' );
-      }
-      , getLabel
-    );
-    // this._waypoint.getRoute( waypointsOpt, this.sebmMarkers );
+    /**
+     * put it all together and get Route > render Route on Map > update Waypoint Markers
+     */
+    this._waypoint.getRoute( waypointsOpt )
+    .then(
+      routeResult=>{
+        return this._waypoint.renderRoute(routeResult, 'map-panel')
+    })
+    .then(
+      routeResult=>{
+        console.info(`BEFORE updateWaypointMarkers(), routeMarkers=`, routeMarkers)
+        this._waypoint.updateWaypointMarkers(routeResult, routeMarkers, getInfoForMarker)
+    })
     return true;
   }
-
 }

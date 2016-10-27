@@ -3,11 +3,12 @@ import { GoogleMap, LatLng, LatLngBounds, Marker } from 'angular2-google-maps/co
 // see: http://stackoverflow.com/questions/34376854/delegation-eventemitter-or-observable-in-angular2/35568924#35568924
 // import { MarkerClusterer, Cluster, ClusterIcon } from 'js-marker-clusterer/src/markerclusterer';
 import { MappiMarkerClusterer } from './mappi-marker-clusterer';
-import { googleMapsReady } from "./map-google.component";
+import { googleMapsReady, UuidMarker } from "./map-google.component";
 
 
 export interface jmcCluster {
-  markers: Marker[],
+  // markers: Marker[],
+  getMarkers: ()=>UuidMarker[],
   getCenter: ()=>LatLng,
   getSize: ()=>number,
   remove: ()=>void
@@ -26,7 +27,7 @@ export class MarkerClustererService {
   map: GoogleMap;
   selected = new EventEmitter<jmcCluster>();
   clusters = new EventEmitter<jmcCluster[]>();
-  private _markers : Marker[];
+  private _cacheMarkers : UuidMarker[];     // cache Markers when isVisible = false
 
   constructor() {
   }
@@ -42,6 +43,7 @@ export class MarkerClustererService {
       Google.maps.event.clearListeners(this.map, "clusterclick");
     else
       Google.maps.event.addListener(this.map, 'clusterclick', (cluster:jmcCluster)=>{
+        // console.info("MarkerClustererService.clusterclick cluster=", cluster);
         this.selected.emit(cluster);
       });
   }
@@ -54,12 +56,12 @@ export class MarkerClustererService {
     else
       this.isVisible = !this.isVisible;
 
-    if (this.isVisible && this._markers) {
-      this.instance.addMarkers(this._markers);
-      this._markers = undefined;
+    if (this.isVisible && this._cacheMarkers) {
+      this.instance.addMarkers(this._cacheMarkers);
+      this._cacheMarkers = undefined;
     } else if (!this.isVisible){
-      if (!this._markers)
-        this._markers = this.instance.getMarkers();
+      if (!this._cacheMarkers)
+        this._cacheMarkers = this.instance.getMarkers();
       this.instance.clearMarkers();
     }
   }
@@ -80,8 +82,8 @@ export class MarkerClustererService {
       return clusters;
   }
 
-  render (markers: Marker[]) {
-    if (!this.map) return;
+  render (markers: UuidMarker[]) : Promise<void> {
+    if (!this.map) return Promise.resolve();
 
     if (this.instance && !markers.length) {
       this.listenForClusterClick(false);
@@ -107,5 +109,6 @@ export class MarkerClustererService {
       );
       this.isVisible = true;
     }
+    return Promise.resolve()
   }
 }

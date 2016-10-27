@@ -7,7 +7,7 @@ import { MyApp } from './app.component';
 import { AboutPage } from '../pages/about/about';
 import { ContactPage } from '../pages/contact/contact';
 import { HomePage } from '../pages/home/home';
-import { MappiPage } from '../pages/mappi/mappi';
+import { MappiPage, renderPhotoForView } from '../pages/mappi/mappi';
 import { TabsPage } from '../pages/tabs/tabs';
 import { SharedModule } from '../shared/shared.module';
 import { NameListService } from '../shared/index';
@@ -22,7 +22,7 @@ import { ImageService, CordovaImageService } from "../shared/camera-roll/image.s
     AboutPage,
     ContactPage,
     HomePage,
-    MappiPage,
+    MappiPage, renderPhotoForView,
     TabsPage
   ],
   imports: [

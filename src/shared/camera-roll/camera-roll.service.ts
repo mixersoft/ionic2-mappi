@@ -55,6 +55,7 @@ export interface cameraRollPhoto {
  * @private
 */
 export function distanceBetweenLatLng (p1: Location.GeoJsonPoint, p2:Location.GeoJsonPoint) : number;
+export function distanceBetweenLatLng (p1: google.maps.LatLng, p2:google.maps.LatLng) : number;
 export function distanceBetweenLatLng (p1: LatLng, p2:LatLng) : number;
 export function distanceBetweenLatLng (p1: any, p2:any) : number {
   if (!p1 || !p2) {
@@ -348,5 +349,3 @@ export class MockCameraRollWithLoc extends CameraRollWithLoc {
     return Promise.resolve(this._photos);
   }
 }
-
-console.log('cameraRoll.ts is now loaded...');
