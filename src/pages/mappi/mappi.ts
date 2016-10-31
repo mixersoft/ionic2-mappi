@@ -17,7 +17,6 @@ import {
 import { sebmMarker, MapGoogleComponent,
   mapContainsFn, mapContainsLoc, mapViz 
 } from "../../shared/map-google/index";
-import { ExtendedGoogleMapsAPIWrapper as GMaps } from "../../shared/map-google/extended-google-maps-api-wrapper";
 import { WaypointService } from "../../shared/map-google/waypoint.service";
 import { ImageService } from "../../shared/camera-roll/image.service";
 // mocks

@@ -3,10 +3,6 @@ import { GoogleMap, LatLng, LatLngBounds, Marker } from 'angular2-google-maps/co
 // see: http://stackoverflow.com/questions/34376854/delegation-eventemitter-or-observable-in-angular2/35568924#35568924
 
 import { GeoJson, GeoJsonPoint, isGeoJson } from "../camera-roll/location-helper";
-import { googleMapsReady } from "./map-google.component";
-
-let Google : any = undefined;
-let Heatmap : any = undefined;
 
 @Injectable()
 export class HeatmapService {
@@ -18,19 +14,17 @@ export class HeatmapService {
 
   constructor() { }
 
-  bind (o: googleMapsReady) {
-    this.map = o.map;
-    Google = o.google;
-    if (!Google.maps.visualization ) new Error("Google Maps visualization library not loaded");
-    Heatmap = Google.maps.visualization.HeatmapLayer;
+  bind (map:GoogleMap) {
+    this.map = map;
+    if (!google.maps.visualization ) new Error("Google Maps visualization library not loaded");
   }
 
   // listenForClusterClick(on: boolean = true){
   //   if (!this.map) return;
   //   if (!on)
-  //     Google.maps.event.clearListeners(this.map, "clusterclick");
+  //     google.maps.event.clearListeners(this.map, "clusterclick");
   //   else
-  //     Google.maps.event.addListener(this.map, 'clusterclick', (cluster:jmcCluster)=>{
+  //     google.maps.event.addListener(this.map, 'clusterclick', (cluster:jmcCluster)=>{
   //       this.selected.emit(cluster);
   //     });
   // }
@@ -55,7 +49,7 @@ export class HeatmapService {
 
     let heatmapData = points.map( o => {
       let [lng, lat] = o.coordinates;
-      return new Google.maps.LatLng(lat, lng);
+      return new google.maps.LatLng(lat, lng);
     });
 
     if (this.instance && !heatmapData.length) {
@@ -68,7 +62,7 @@ export class HeatmapService {
       this.toggleVisible(true);
     } else {
       // this.listenForClusterClick();
-      this.instance = new Heatmap({
+      this.instance = new google.maps.visualization.HeatmapLayer({
         data: heatmapData
       });
       this.toggleVisible(true);

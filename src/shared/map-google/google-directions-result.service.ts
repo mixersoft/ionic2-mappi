@@ -3,8 +3,6 @@ import _ from "lodash";
 import { Observable } from 'rxjs/Observable';
 import 'rxjs/Rx';
 
-let Google : any = undefined;
-
 export interface poi {
   index: number
   location: LatLng,

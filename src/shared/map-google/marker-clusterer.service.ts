@@ -3,7 +3,7 @@ import { GoogleMap, LatLng, LatLngBounds, Marker } from 'angular2-google-maps/co
 // see: http://stackoverflow.com/questions/34376854/delegation-eventemitter-or-observable-in-angular2/35568924#35568924
 // import { MarkerClusterer, Cluster, ClusterIcon } from 'js-marker-clusterer/src/markerclusterer';
 import { MappiMarkerClusterer } from './mappi-marker-clusterer';
-import { googleMapsReady, UuidMarker } from "./map-google.component";
+import { UuidMarker } from "./map-google.component";
 
 
 export interface jmcCluster {
@@ -18,7 +18,6 @@ export interface jmcCluster {
 
 /* external globals */
 declare var MarkerClusterer: any;
-let Google : any = undefined;
 
 @Injectable()
 export class MarkerClustererService {
@@ -32,17 +31,16 @@ export class MarkerClustererService {
   constructor() {
   }
 
-  bind (o: googleMapsReady) {
-    this.map = o.map;
-    Google = o.google;
+  bind (map:GoogleMap) {
+    this.map = map;
   }
 
   listenForClusterClick(on: boolean = true){
     if (!this.map) return;
     if (!on)
-      Google.maps.event.clearListeners(this.map, "clusterclick");
+      google.maps.event.clearListeners(this.map, "clusterclick");
     else
-      Google.maps.event.addListener(this.map, 'clusterclick', (cluster:jmcCluster)=>{
+      google.maps.event.addListener(this.map, 'clusterclick', (cluster:jmcCluster)=>{
         // console.info("MarkerClustererService.clusterclick cluster=", cluster);
         this.selected.emit(cluster);
       });

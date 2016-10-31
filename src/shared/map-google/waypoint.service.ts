@@ -6,8 +6,7 @@ import { Observable } from 'rxjs/Observable';
 import 'rxjs/Rx';
 
 
-import { googleMapsReady, sebmMarker, UuidMarker, UuidMarkerFactory } from "./map-google.component";
-import { ExtendedGoogleMapsAPIWrapper as GMaps } from "./extended-google-maps-api-wrapper";
+import { sebmMarker, UuidMarker } from "./map-google.component";
 import { GoogleDirectionsResult, poi } from "./google-directions-result.service";
 // refactor, move this to LocationHelper
 import {distanceBetweenLatLng} from  "../camera-roll/camera-roll.service";
@@ -114,9 +113,9 @@ export class WaypointService {
     // wait for GoogleMapsReady before we initialize, see this.bind() 
   }
 
-  bind (o: googleMapsReady, sebmMarkers: sebmMarker[], mapPanelId?: string) {
+  bind (map: GoogleMap, sebmMarkers: sebmMarker[], mapPanelId?: string) {
     // use @types/googlemaps
-    this.map = WaypointService.sebmMap2GoogleMap(o.map);
+    this.map = WaypointService.sebmMap2GoogleMap(map);
     this.sebmMarkers = sebmMarkers;
 
     this._directionsService = new google.maps.DirectionsService();

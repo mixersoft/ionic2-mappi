@@ -32,11 +32,6 @@ interface WindowWithGoogle extends Window {
   google: any;
 }
 
-export interface googleMapsReady {
-  google: any;      // window.google global object
-  map: GoogleMap;   // instance from new google.maps.Map()
-}
-
 // new google.maps.Marker for MarkerClusterer
 export interface UuidMarker extends google.maps.Marker {
   uuid: string;
@@ -48,6 +43,7 @@ export interface UuidMarker extends google.maps.Marker {
  */
 export function UuidMarkerFactory(uuid: string, options?: google.maps.MarkerOptions) : Promise<UuidMarker> {
   // OR, guard for google.maps
+  if (!google) return Promise.resolve(null)
   return this.ready.then( ()=>{
     let gmOptions = options as any as google.maps.MarkerOptions;
     const marker = new google.maps.Marker( gmOptions );
@@ -106,7 +102,6 @@ export enum mapViz {
 /* external globals */
 declare var window;
 declare var MarkerClusterer: any;
-let Google : any = undefined;
 
 /*
   Generated class for the MapGoogle component.
@@ -183,14 +178,6 @@ export class MapGoogleComponent {
         this._readyResolver = resolve;
       }
     )
-    .then( ()=> {
-      let googMapApiWrapper : GoogleMapsAPIWrapper = getPrivateMethod(this.sebmGoogMap, '_mapsWrapper');
-      // find native google.maps.Map() instance
-      return googMapApiWrapper.getNativeMap();
-    })
-    .then( (map: GoogleMap)=> {
-      return this._googMap = map;    // save ref to native map instance
-    });
 
     // experimental
     let ready$ = Observable.fromPromise(this.ready)
@@ -208,10 +195,10 @@ export class MapGoogleComponent {
     })
     .then( ()=>{
       this.waitForGoogleMaps()
-      .then( (resp: googleMapsReady)=>{
-        this._markerClusterer.bind(resp);
-        this._heatmap.bind(resp);
-        this._waypoint.bind(resp, this.sebmMarkers, 'map-panel');
+      .then( (map: GoogleMap)=>{
+        this._markerClusterer.bind(map);
+        this._heatmap.bind(map);
+        this._waypoint.bind(map, this.sebmMarkers, 'map-panel');
       })
     })
     .then( ()=>{
@@ -281,38 +268,37 @@ export class MapGoogleComponent {
 
 
   /**
-   * waits until google map is initialized then return window.google
-   * and the google map instance
-   * @return {Promise<googleMapsReady>}
+   * waits until google.maps.Map.onIdle() event, when map is initialized 
+   * then return the SebmGoogleMap instance, google.maps.Map
+   * @return {Promise<GoogleMap>}
    */
-  waitForGoogleMaps() : Promise<googleMapsReady> {
-    return new Promise<googleMapsReady>( (resolve, reject)=>{
-      this.ready.then( (map: GoogleMap)=> {
-        // TODO: use @types/googlemaps namespace=google.maps
-        Google = (window as WindowWithGoogle).google;
-        resolve({
-          google: Google,
-          map: this._googMap
-        });
-      })      
-    })
+  waitForGoogleMaps() : Promise<GoogleMap> {
+    return this.ready
+      .then( ()=> {
+        let googMapApiWrapper : GoogleMapsAPIWrapper = getPrivateMethod(this.sebmGoogMap, '_mapsWrapper');
+        // find native google.maps.Map() instance
+        return googMapApiWrapper.getNativeMap();
+      })
+      .then( (map: GoogleMap)=> {
+        return this._googMap = map;    // save ref to native map instance
+      })     
   }
 
   /**
+   * ???: Is it meaningful to make this Observable???
    * make windows.google and map instance available
-   * @return {Observable<googleMapsReady>} {google:, map:}
+   * @return {Observable<GoogleMap>} {google:, map:}
    */
-  waitForGoogleMaps$() : Observable<googleMapsReady> {
+  waitForGoogleMaps$() : Observable<GoogleMap> {
     return Observable.fromPromise(this.waitForGoogleMaps());
   }
 
-  UuidMarkerFactory(uuid: string, options?: google.maps.MarkerOptions) : Promise<UuidMarker> {
-    return this.ready.then( ()=>{
-      let gmOptions = options as any as google.maps.MarkerOptions;
-      const marker = new google.maps.Marker( gmOptions );
-      marker['uuid'] = uuid;
-      return marker as any as UuidMarker;
-    })
+  UuidMarkerFactory(uuid: string, options?: google.maps.MarkerOptions) : UuidMarker {
+    if (!(google && google.maps)) return null
+    let gmOptions = options as any as google.maps.MarkerOptions;
+    const marker = new google.maps.Marker( gmOptions );
+    marker['uuid'] = uuid;
+    return marker as any as UuidMarker;
   }
 
   onIdle(){
@@ -322,16 +308,7 @@ export class MapGoogleComponent {
     this._readyResolver();  // resolve this.ready, one time
     this._debounce_MapOverlayRenderComplete.next("force");
   }
-  // TODO: not sure when we need to refresh
-  XXXonRefresh(){
-    setTimeout( ()=>{
-      // not required??  what about if we change tabs?
-      // this.sebmGoogMap.triggerResize(); 
-      // console.log(`this.sebmGoogMap.triggerResize();`);
-      this._isMapChanging = false;
-      console.warn(`## Map.onRefresh(), this.isMapChanging=${this._isMapChanging }`)
-    });
-  }
+
   onReset(){
     this.showMap = false;
     this._googMap = null;
@@ -357,10 +334,10 @@ export class MapGoogleComponent {
 
   setBounds(markers?: sebmMarker[]){
     // let google : any = (window as WindowWithGoogle).google;
-    let bounds = new Google.maps.LatLngBounds()
+    let bounds = new google.maps.LatLngBounds()
     this.sebmMarkers = markers || this.sebmMarkers;
     this.sebmMarkers.forEach( m => {
-      let point = new Google.maps.LatLng(m.lat, m.lng);
+      let point = new google.maps.LatLng(m.lat, m.lng);
       bounds.extend(point);
       })
 
@@ -464,7 +441,7 @@ export class MapGoogleComponent {
         'lat': location.coordinates[1],
         'lng': location.coordinates[0]
       }
-      const latLng = new Google.maps.LatLng(latLngLiteral);
+      const latLng = new google.maps.LatLng(latLngLiteral);
       return bounds.contains(latLng);
     }
     return containsFn;
@@ -533,24 +510,20 @@ export class MapGoogleComponent {
         this._heatmap.render(points)
         break;
       case mapViz.ClusterMap:
-        const promises : Promise<UuidMarker>[] = photos
+         const uuidMarkers = photos
           .slice(0,limit)
           .reduce( (result, o, i)=>{
             if (!o.location) return result;
             const [lng,lat] = o.location.coordinates;
-            const pr = this.UuidMarkerFactory(o.uuid, {
-              'position': new Google.maps.LatLng(lat,lng),
+            const marker = this.UuidMarkerFactory(o.uuid, {
+              'position': new google.maps.LatLng(lat,lng),
               'title': o.filename,
             })
-            result.push(pr);
+            result.push(marker);
             return result;
           }, [] );
-        Promise.all(promises)
-        .then( markers=>{
-          // Hack:  for lookup
-          this['_markerClustererPhotos'] = photos; 
-          this._markerClusterer.render(markers)
-        })
+        this['_markerClustererPhotos'] = photos; // Hack:  for lookup
+        this._markerClusterer.render(uuidMarkers)
         break;
     }
     this._debounce_MapOverlayRenderComplete.next(currentViz.toString());
