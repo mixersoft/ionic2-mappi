@@ -1,15 +1,24 @@
 import { EventEmitter, Inject, Injectable } from '@angular/core';
 import { Http, Headers } from '@angular/http';
-import { GoogleMap, LatLng, LatLngBounds, Marker } from 'angular2-google-maps/core/services/google-maps-types';
+import { GoogleMap
+  // , LatLng, LatLngBounds, Marker 
+} from 'angular2-google-maps/core/services/google-maps-types';
 import _ from "lodash";
 import { Observable } from 'rxjs/Observable';
 import 'rxjs/Rx';
 
-
-import { sebmMarker, UuidMarker } from "./map-google.component";
+import { 
+  // gmLatLng, gmLatLngBounds, 
+  sebmLatLng, sebmLatLngBounds,
+  sebmMarkerOptions,
+  GeoJson, GeoJsonPoint, isGeoJson, distanceBetweenLatLng,
+  // gmMarker, gmMarkerOptions
+  UuidMarker
+} from '../location/index';
+// import { UuidMarker } from "./map-google.component";
 import { GoogleDirectionsResult, poi } from "./google-directions-result.service";
 // refactor, move this to LocationHelper
-import {distanceBetweenLatLng} from  "../camera-roll/camera-roll.service";
+// import {distanceBetweenLatLng} from  "../camera-roll/camera-roll.service";
 
 export interface directionsRequest {
   travelMode: string;     // 'WALKING'
@@ -28,7 +37,7 @@ export interface waypointDetail {
   geocode?: {place_id:string, geocoder_status:string, type:string[]};
 }
 
-function _isSebmMarkers(o: UuidMarker[] | sebmMarker[]) : o is sebmMarker[] {
+function _isSebmMarkers(o: UuidMarker[] | sebmMarkerOptions[]) : o is sebmMarkerOptions[] {
   console.warn("Is google.maps.Marker=", o instanceof google.maps.Marker)
   return !( o.length && o[0]['setMap'] );
 }
@@ -37,7 +46,7 @@ function _isSebmMarkers(o: UuidMarker[] | sebmMarker[]) : o is sebmMarker[] {
 export class WaypointService {
   map: google.maps.Map;
   apiEndpoint: string = "http://maps.googleapis.com/maps/api/directions/json?";
-  sebmMarkers: sebmMarker[];
+  sebmMarkers: sebmMarkerOptions[];
 
   private _directionsDisplay : google.maps.DirectionsRenderer;
   private _directionsService : google.maps.DirectionsService;
@@ -113,7 +122,7 @@ export class WaypointService {
     // wait for GoogleMapsReady before we initialize, see this.bind() 
   }
 
-  bind (map: GoogleMap, sebmMarkers: sebmMarker[], mapPanelId?: string) {
+  bind (map: GoogleMap, sebmMarkers: sebmMarkerOptions[], mapPanelId?: string) {
     // use @types/googlemaps
     this.map = WaypointService.sebmMap2GoogleMap(map);
     this.sebmMarkers = sebmMarkers;
@@ -209,7 +218,7 @@ export class WaypointService {
   }
 
   updateWaypointMarkers( routeResult: google.maps.DirectionsResult
-    , markers:  UuidMarker[] | sebmMarker[]
+    , markers:  UuidMarker[] | sebmMarkerOptions[]
     , getLabelForStep?:(i:number, content: string) => string
   ) {
 
@@ -251,12 +260,10 @@ export class WaypointService {
       )
     }
 
-    const XXX_findSebmMarkerByLeg = function(markers: sebmMarker[], leg: any, waypointOpt?: directionsRequest): sebmMarker {
+    const XXX_findSebmMarkerByLeg = function(markers: sebmMarkerOptions[], leg: any, waypointOpt?: directionsRequest): sebmMarkerOptions {
       const stepLocation = leg.steps[0].start_location as google.maps.LatLng;
-      const foundMarker = _.find( markers, (o,i)=>{
-        const markerLoc = new google.maps.LatLng(o.lat, o.lng);
-        // return stepLocation.equals(markerLoc)
-        const distM = distanceBetweenLatLng(stepLocation, markerLoc)
+      const foundMarker = _.find( markers, (m,i)=>{
+        const distM = distanceBetweenLatLng(stepLocation, <sebmLatLng>m.position)
         console.log(`update SebmMarker, index=${i}, distance=${distM}`)
         return distM < 10 // within 10 meters
       });

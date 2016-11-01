@@ -8,7 +8,6 @@ import { CommonModule } from '@angular/common';
 import { MapGoogleComponent } from './map-google/index';
 import { NameListService } from './name-list/index';
 import { CameraRollWithLoc } from './camera-roll/index';
-import { GeoJsonPoint, isGeoJson } from './camera-roll/index';
 
 import { AgmCoreModule } from 'angular2-google-maps/core';
 

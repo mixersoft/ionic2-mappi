@@ -2,8 +2,16 @@
 import _ from "lodash";
 
 import {cameraRoll as cameraRollAsJsonString} from "../../mocks/mock-camera-roll";
-import * as Location from "./location-helper";
-import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
+// import * as Location from "./location-helper";
+import { 
+  // gmLatLng, gmLatLngBounds, 
+  // sebmLatLng, sebmLatLngBounds,
+  GeoJson, GeoJsonPoint, isGeoJson,
+  // gmMarker, gmMarkerOptions,
+  GpsRegion, CircularGpsRegion,
+  distanceBetweenLatLng
+} from '../location/index';
+// import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
 
 declare var window;
 
@@ -23,8 +31,8 @@ export interface optionsFilter {
   locationName?: string
   mediaType?: mediaType[]
   isFavorite?: boolean
-  near?: {point: Location.GeoJsonPoint, distance: number},
-  contains?: (location: Location.GeoJson) => boolean   // google maps
+  near?: {point: GeoJsonPoint, distance: number},
+  contains?: (location: GeoJson) => boolean   // google maps
 }
 
 export interface optionsSort {
@@ -35,7 +43,7 @@ export interface optionsSort {
 export interface cameraRollPhoto {
   uuid: string,
   filename: string,
-  location: Location.GeoJsonPoint,
+  location: GeoJsonPoint,
   dateTaken: string, // isoDate
   localTime: string, // YYYY-MM-DD HH:MM:SS.SSS
   mediaType: number,
@@ -43,50 +51,6 @@ export interface cameraRollPhoto {
   momentId?: string,
   momentLocationName?: string
 }
-
-/**
- * from package: js-marker-clusterer
- * Calculates the distance between two latlng locations in km.
- * @see http://www.movable-type.co.uk/scripts/latlong.html
- *
- * @param {google.maps.LatLng} p1 The first lat lng point.
- * @param {google.maps.LatLng} p2 The second lat lng point.
- * @return {number} The distance between the two points in m.
- * @private
-*/
-export function distanceBetweenLatLng (p1: Location.GeoJsonPoint, p2:Location.GeoJsonPoint) : number;
-export function distanceBetweenLatLng (p1: google.maps.LatLng, p2:google.maps.LatLng) : number;
-export function distanceBetweenLatLng (p1: LatLng, p2:LatLng) : number;
-export function distanceBetweenLatLng (p1: any, p2:any) : number {
-  if (!p1 || !p2) {
-    return 0;
-  }
-
-  let lng1: number, lat1: number, lng2: number, lat2: number;
-  if (Location.isGeoJson(p1)) {
-    [lng1, lat1] = p1.coordinates;
-  } else {
-    lng1 = p1.lng();
-    lat1 = p1.lat();
-  }
-
-  if (Location.isGeoJson(p2)) {
-    [lng2, lat2] = p2.coordinates;
-  } else {
-    lng2 = p2.lng();
-    lat2 = p2.lat();
-  }
-
-  var R = 6371000; // Radius of the Earth in m
-  var dLat = (lat2 - lat1) * Math.PI / 180;
-  var dLon = (lng2 - lng1) * Math.PI / 180;
-  var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  var d = R * c;
-  return d;
-};
 
 export class CameraRollWithLoc {
   public isCordova = true;
@@ -205,8 +169,8 @@ export class CameraRollWithLoc {
     }
     return pr.then( (photos)=>{
       photos.forEach( (o)=> {
-        if (o.location && o.location instanceof Location.GeoJsonPoint == false ) {
-          o.location = new Location.GeoJsonPoint(o.location);
+        if (o.location && o.location instanceof GeoJsonPoint == false ) {
+          o.location = new GeoJsonPoint(o.location);
         }
       });
       this._photos = photos;
@@ -235,7 +199,7 @@ export class CameraRollWithLoc {
     let result = this._photos;
 
     // cache value outside filter() loop
-    let gpsRegion : Location.GpsRegion;
+    let gpsRegion : GpsRegion;
 
     // from, to expressed in localTime via from = new Date([date string])
     // let fromAsLocalTime = new Date(from.valueOf() - from.getTimezoneOffset()*60000).toJSON()
@@ -254,8 +218,8 @@ export class CameraRollWithLoc {
 
       if (near) {
         if (!o['location']) return false;
-        gpsRegion = gpsRegion || new Location.CircularGpsRegion(near.point, near.distance)
-        let loc = new Location.GeoJsonPoint(o['location'].coordinates)
+        gpsRegion = gpsRegion || new CircularGpsRegion(near.point, near.distance)
+        let loc = new GeoJsonPoint(o['location'].coordinates)
         if (gpsRegion.contains(loc) == false) return false;
       }
 
@@ -306,8 +270,8 @@ export class CameraRollWithLoc {
 
     result = result.slice(0, limit);
     result.forEach( (o)=> {
-      if (o.location instanceof Location.GeoJsonPoint == false ) {
-        o.location = new Location.GeoJsonPoint(o.location);
+      if (o.location instanceof GeoJsonPoint == false ) {
+        o.location = new GeoJsonPoint(o.location);
       }
     });
     return result
@@ -332,8 +296,8 @@ export class MockCameraRollWithLoc extends CameraRollWithLoc {
       console.error( "Error parsing JSON" );
     }
     this._photos.forEach( (o)=> {
-      if (o.location && o.location instanceof Location.GeoJsonPoint == false ) {
-        o.location = new Location.GeoJsonPoint(o.location);
+      if (o.location && o.location instanceof GeoJsonPoint == false ) {
+        o.location = new GeoJsonPoint(o.location);
       }
     });
   }

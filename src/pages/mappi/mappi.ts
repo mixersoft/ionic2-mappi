@@ -4,17 +4,24 @@ import { Component, EventEmitter, Inject,
   Pipe, PipeTransform, 
   ViewChild 
 } from '@angular/core';
-import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
+// import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
 import { NavController, Platform } from 'ionic-angular';
 import _ from "lodash";
 
+// import { GeoJsonPoint, isGeoJson } from "../../shared/camera-roll/location-helper";
+import { 
+  gmLatLng, gmLatLngBounds, 
+  sebmLatLng, sebmLatLngBounds,
+  sebmMarkerOptions,
+  GeoJson, GeoJsonPoint, isGeoJson,
+  gmMarker, gmMarkerOptions
+} from '../../shared/location/index';
 
-import { GeoJsonPoint, isGeoJson } from "../../shared/camera-roll/location-helper";
 import {
   CameraRollWithLoc, cameraRollPhoto, 
   mediaType, optionsFilter
 } from "../../shared/camera-roll/camera-roll.service";
-import { sebmMarker, MapGoogleComponent,
+import { MapGoogleComponent,
   mapContainsFn, mapContainsLoc, mapViz 
 } from "../../shared/map-google/index";
 import { WaypointService } from "../../shared/map-google/waypoint.service";
@@ -78,7 +85,7 @@ export class MappiPage {
   viz: mapViz; 
   mapCenter: GeoJsonPoint;
   mapZoom: number = DEFAULT.zoom;
-  sebmMarkers: sebmMarker[] = [];
+  sebmMarkers: sebmMarkerOptions[] = [];
   photos: cameraRollPhoto[] = [];     // photos to be mapped
   selecteds: cameraRollPhoto[];
   destinations: {label:string,location:GeoJsonPoint}[];

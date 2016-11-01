@@ -3,7 +3,7 @@ import { GoogleMap, LatLng, LatLngBounds, Marker } from 'angular2-google-maps/co
 // see: http://stackoverflow.com/questions/34376854/delegation-eventemitter-or-observable-in-angular2/35568924#35568924
 // import { MarkerClusterer, Cluster, ClusterIcon } from 'js-marker-clusterer/src/markerclusterer';
 import { MappiMarkerClusterer } from './mappi-marker-clusterer';
-import { UuidMarker } from "./map-google.component";
+import { UuidMarker } from '../location/index';
 
 
 export interface jmcCluster {

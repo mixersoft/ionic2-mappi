@@ -8,11 +8,24 @@ import 'rxjs/Rx';
 
 // import { SebmGoogleMap, SebmGoogleMapMarker, SebmGoogleMapInfoWindow } from 'angular2-google-maps/core/directives';
 import { GoogleMapsAPIWrapper } from 'angular2-google-maps/core/services'
-import { GoogleMap, LatLng, LatLngBounds, 
-  Marker, MarkerOptions, MouseEvent 
+import { 
+  gmLatLng, gmLatLngBounds, 
+  sebmLatLng, sebmLatLngBounds,
+  sebmMarkerOptions,
+  GeoJson, GeoJsonPoint, isGeoJson,
+  gmMarker, gmMarkerOptions,
+  UuidMarker, UuidMarkerFactory
+  , gmap
+} from '../location/index';
+
+import { 
+  GoogleMap,
+  // LatLng, LatLngBounds, 
+  // Marker, MarkerOptions, 
+  MouseEvent 
 } from 'angular2-google-maps/core/services/google-maps-types'
 
-import { GeoJson, GeoJsonPoint, isGeoJson } from "../camera-roll/location-helper";
+// import { GeoJson, GeoJsonPoint, isGeoJson } from "../camera-roll/location-helper";
 import {
   CameraRollWithLoc as CameraRoll,
   cameraRollPhoto, mediaType
@@ -28,60 +41,7 @@ const getPrivateMethod = function (myClass:any, methodName:string) : any {
   return myClass[methodName];
 }
 
-interface WindowWithGoogle extends Window {
-  google: any;
-}
-
-// new google.maps.Marker for MarkerClusterer
-export interface UuidMarker extends google.maps.Marker {
-  uuid: string;
-}
-
-/**
- * Hack: "extend" google.maps.Marker to include uuid property
- *  guard with this.ready.then() to ensure google.maps is loaded
- */
-export function UuidMarkerFactory(uuid: string, options?: google.maps.MarkerOptions) : Promise<UuidMarker> {
-  // OR, guard for google.maps
-  if (!google) return Promise.resolve(null)
-  return this.ready.then( ()=>{
-    let gmOptions = options as any as google.maps.MarkerOptions;
-    const marker = new google.maps.Marker( gmOptions );
-    marker['uuid'] = uuid;
-    return marker as any as UuidMarker;
-  })
-}
-
-
-// for use with <sebm-google-map-marker>
-export interface sebmMarker {
-	lat: number;
-	lng: number;
-  draggable: boolean;
-	label?: string;
-  detail?: string;
-  uuid?: string;
-	icon?: string;
-}
-
-/**
- * create SebmMarker object from UuidMarker or google.maps.Marker with extra uuid property
- * @param  {UuidMarker} marker [description]
- * @return {sebmMarker}        [description]
- */
-export function getSebmMarker(marker: UuidMarker | google.maps.Marker) : sebmMarker {
-  const m = marker as any;
-  const sebm : any = {
-    'lat': m.position.lat(),
-    'lng': m.position.lng(),
-    'draggable': false
-  }
-  ['uuid', 'label', 'detail', 'icon'].forEach( (k: string)=> {
-    if (m.hasOwnProperty(k)) sebm[k] = m[k];
-  })
-  return sebm as sebmMarker;
-}
-
+declare var google: any; // namespace google.maps {} 
 
 export interface mapContainsLoc {
   contains: (location: GeoJson) => boolean,
@@ -136,8 +96,8 @@ export class MapGoogleComponent {
 
   @Input() center: GeoJsonPoint;
   @Input() zoom: number;
-  @Input() sebmMarkers: sebmMarker[];
-  @Output() markersChange: EventEmitter<sebmMarker[]> = new EventEmitter<sebmMarker[]>();
+  @Input() sebmMarkers: sebmMarkerOptions[];
+  @Output() markersChange: EventEmitter<sebmMarkerOptions[]> = new EventEmitter<sebmMarkerOptions[]>();
   // getMapContainsFn() : (o:any)=>boolean
   @Output() mapBoundsChange: EventEmitter<mapContainsFn> = new EventEmitter<mapContainsFn>();
   @Output() markerClick: EventEmitter<string[]> = new EventEmitter<string[]>();
@@ -158,10 +118,9 @@ export class MapGoogleComponent {
   ready: Promise<GoogleMap>;
   private _readyResolver : any;
   private _googMap: GoogleMap;
-  private _google: any;
 
   // internal state attributes
-  private _debounce_MapBoundsChange: Subject<LatLngBounds> = new Subject<LatLngBounds>();
+  private _debounce_MapBoundsChange: Subject<sebmLatLngBounds> = new Subject<sebmLatLngBounds>();
   private _debounce_MapOverlayRender: Subject<SimpleChange> = new Subject<SimpleChange>();
   private _debounce_MapOverlayRenderComplete: Subject<string> = new Subject<string>();
   private _isMapChanging = false
@@ -293,13 +252,6 @@ export class MapGoogleComponent {
     return Observable.fromPromise(this.waitForGoogleMaps());
   }
 
-  UuidMarkerFactory(uuid: string, options?: google.maps.MarkerOptions) : UuidMarker {
-    if (!(google && google.maps)) return null
-    let gmOptions = options as any as google.maps.MarkerOptions;
-    const marker = new google.maps.Marker( gmOptions );
-    marker['uuid'] = uuid;
-    return marker as any as UuidMarker;
-  }
 
   onIdle(){
     // use as mapReady event
@@ -332,13 +284,11 @@ export class MapGoogleComponent {
     });
   }
 
-  setBounds(markers?: sebmMarker[]){
-    // let google : any = (window as WindowWithGoogle).google;
-    let bounds = new google.maps.LatLngBounds()
+  setBounds(markers?: sebmMarkerOptions[]){
+    let bounds = new google.maps.LatLngBounds();
     this.sebmMarkers = markers || this.sebmMarkers;
     this.sebmMarkers.forEach( m => {
-      let point = new google.maps.LatLng(m.lat, m.lng);
-      bounds.extend(point);
+      bounds.extend(m.position);
       })
 
     this.ready.then( (map:GoogleMap)=> {
@@ -348,7 +298,7 @@ export class MapGoogleComponent {
     .then( (map:GoogleMap)=> {
       setTimeout(  ()=> {
         // console.log(`setBounds()`);
-        map.fitBounds(bounds);
+        map.fitBounds(bounds as any as sebmLatLngBounds);
         console.log(`bounds=${bounds}`);
       }, 100);
       return map;
@@ -400,27 +350,27 @@ export class MapGoogleComponent {
     let discard = this._markerClusterer.isVisible;
     if (discard) return;
 
-    let sebmMarker: sebmMarker;
+    let sebmMarkerOptions: sebmMarkerOptions;
     if ($event.latLng) {
       // BUG: not geting these anymore. angular2-google-maps0.12.0 issue?
-      sebmMarker = {
-        lat: $event.latLng.lat(),
-        lng: $event.latLng.lng(),
+      sebmMarkerOptions = {
+        uuid: `${Date.now()}`,
+        position: $event.latLng,
         draggable: false
       }
     } else if ($event.coords) {
-      sebmMarker = {
-        lat: $event.coords.lat,
-        lng: $event.coords.lng,
+      sebmMarkerOptions = {
+        uuid: `${Date.now()}`,
+        position: $event.latLng,
         draggable: false
       }
     }
-    this.sebmMarkers.push(sebmMarker);
+    this.sebmMarkers.push(sebmMarkerOptions);
   }
 
-  markerDragEnd(m: sebmMarker, $event: MouseEvent) {
-    let {label,lat,lng} = m
-    console.log(`dragEnd marker=${label} [${lat},${lng}]`);
+  markerDragEnd(m: sebmMarkerOptions, $event: MouseEvent) {
+    let {label,position} = m
+    console.log(`dragEnd marker=${label}, loc=${(<sebmLatLng>position).toUrlValue()}`);
     // console.log('dragEnd', m, $event);
   }
 
@@ -429,20 +379,17 @@ export class MapGoogleComponent {
   /**
    * experimental
    */
-  getMapContainsFn(bounds?: LatLngBounds) : mapContainsFn {
+  getMapContainsFn(bounds?: sebmLatLngBounds) : mapContainsFn {
     if (!this._googMap) return function(){
       return false;
     };
-    if (!bounds) bounds = this._googMap.getBounds();
+    if (!bounds) bounds = (this._googMap).getBounds();
     // console.log(`getMapContainsFn()=${bounds}`)
     const containsFn : mapContainsFn = function(location: GeoJsonPoint) {
       if (!location) return false;
-      const latLngLiteral = {
-        'lat': location.coordinates[1],
-        'lng': location.coordinates[0]
-      }
-      const latLng = new google.maps.LatLng(latLngLiteral);
-      return bounds.contains(latLng);
+      const {lat, lng} = location.toLatLngLiteral();
+      const latLng = new google.maps.LatLng(lat,lng);
+      return bounds.contains(latLng as any as sebmLatLng);
     }
     return containsFn;
   }
@@ -486,12 +433,13 @@ export class MapGoogleComponent {
       case mapViz.Markers:
         limit = 26;
         const markers = Array.from(this.sebmMarkers);
-        const sebmMarkers : sebmMarker[] = photos.slice(0,limit).reduce( (result, o, i) => {
+        const sebmMarkers : sebmMarkerOptions[] = photos.slice(0,limit).reduce( (result, o, i) => {
           if (!o.location) return result
           const found = _.find( markers, {uuid: o.uuid});
           const m = {
-            lat: o.location.latitude(),
-            lng: o.location.longitude(),
+            // lat: o.location.latitude(),
+            // lng: o.location.longitude(),
+            position: <sebmLatLng>o.location.toLatLng(),
             uuid: o.uuid,
             detail: found && found.detail || `${o.filename}`,
             label: String.fromCharCode(97 + i),
@@ -499,7 +447,7 @@ export class MapGoogleComponent {
           }
           result.push(m);
           return result;
-        }, [] as sebmMarker[]);
+        }, [] as sebmMarkerOptions[]);
         // render markers using SebmGoogleMapMarker
         console.info(`renderMapVizChange() Markers, count=${photos.length}`)
         this.sebmMarkers = sebmMarkers;
@@ -515,11 +463,12 @@ export class MapGoogleComponent {
           .reduce( (result, o, i)=>{
             if (!o.location) return result;
             const [lng,lat] = o.location.coordinates;
-            const marker = this.UuidMarkerFactory(o.uuid, {
+            const markerOptions = {
               'position': new google.maps.LatLng(lat,lng),
               'title': o.filename,
-            })
-            result.push(marker);
+            }
+            const marker = UuidMarkerFactory(o.uuid, markerOptions);
+            result.push( marker );
             return result;
           }, [] );
         this['_markerClustererPhotos'] = photos; // Hack:  for lookup
@@ -535,7 +484,7 @@ export class MapGoogleComponent {
 
     // Hack?
     const _cache : { [key:string] : string} = {};
-    const cacheUuid = function (center: LatLng | string, uuid?: string) : string {
+    const cacheUuid = function (center: sebmLatLng | string, uuid?: string) : string {
       const key = typeof center == "string" ? center : center.toString();
       if (center && uuid) {
         return _cache[key] = uuid;
@@ -576,11 +525,12 @@ export class MapGoogleComponent {
   getRouteOptsFromPhotos(photos: cameraRollPhoto[]) : directionsRequest {
     if (!photos.length) return undefined;
     let waypointsOpt : any = {};
-    let toLatLng : (o:cameraRollPhoto | sebmMarker)=>{lat:number, lng:number};
+    let toLatLng : (o:cameraRollPhoto | sebmMarkerOptions)=>{lat:number, lng:number};
     _.each( photos, (o,i,l) => {
       toLatLng = isGeoJson(o.location) ?
-        p => (p as cameraRollPhoto).location.toLatLng() :
-        p => _.pick(p, ['lat','lng']) as {lat:number, lng:number};
+        p => (p as cameraRollPhoto).location.toLatLngLiteral() :
+        // p => _.pick(p, ['lat','lng']) as {lat:number, lng:number};
+        p => (<sebmLatLng>(<sebmMarkerOptions>p).position).toJSON()
       if (i==0) {
         // waypointsOpt['origin'] = _.pick(m, ['lat','lng']);
         waypointsOpt['origin'] = Object.assign(toLatLng(o), {uuid:o.uuid})
@@ -641,13 +591,13 @@ export class MapGoogleComponent {
     if (!photos) photos = this._data;
 
     // get directions for before/after locations
-    // interface markers, not google.maps.Markers
+    // interface markers, not gmMarkers
     // use clusters
 
     let waypointsOpt : directionsRequest;
-    let routeMarkers : UuidMarker[] | sebmMarker[];
+    let routeMarkers : UuidMarker[] | sebmMarkerOptions[];
     let getInfoForMarker : (i:number, content: string) => string;
-    let getPhotoForWaypoint : (point: sebmMarker | jmcCluster) => string;
+    let getPhotoForWaypoint : (point: sebmMarkerOptions | jmcCluster) => string;
     let dirPromise: Promise<google.maps.DirectionsResult>;
     
 
@@ -679,7 +629,7 @@ export class MapGoogleComponent {
          */
         if (photos.length <= 10) {
           waypointsOpt = this.getRouteOptsFromPhotos(photos);
-          getPhotoForWaypoint = (o: sebmMarker) => o.uuid;
+          getPhotoForWaypoint = (o: sebmMarkerOptions) => o.uuid;
           routeMarkers = this.sebmMarkers;
         } else {
           // cluster SebmMarkers
@@ -704,7 +654,7 @@ export class MapGoogleComponent {
           // only create route for first 10 clusteredPhotos
           waypointsOpt = this.getRouteOptsFromPhotos( photos.slice(0,10));
           
-          getPhotoForWaypoint = (o: sebmMarker) => o.uuid;
+          getPhotoForWaypoint = (o: sebmMarkerOptions) => o.uuid;
 
           const photoUuids = photos.map( o=>o.uuid );
           routeMarkers = this.sebmMarkers.filter( m=>_.includes( photoUuids, m.uuid) );
