@@ -1,17 +1,12 @@
-//  for demo data
 import _ from "lodash";
 
 import {cameraRoll as cameraRollAsJsonString} from "../../mocks/mock-camera-roll";
-// import * as Location from "./location-helper";
 import { 
-  // gmLatLng, gmLatLngBounds, 
   // sebmLatLng, sebmLatLngBounds,
   GeoJson, GeoJsonPoint, isGeoJson,
-  // gmMarker, gmMarkerOptions,
   GpsRegion, CircularGpsRegion,
   distanceBetweenLatLng
 } from '../location/index';
-// import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
 
 declare var window;
 

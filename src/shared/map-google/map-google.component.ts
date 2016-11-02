@@ -6,26 +6,15 @@ import { Observable } from 'rxjs/Observable';
 import { Subject } from 'rxjs/Subject';
 import 'rxjs/Rx';
 
-// import { SebmGoogleMap, SebmGoogleMapMarker, SebmGoogleMapInfoWindow } from 'angular2-google-maps/core/directives';
 import { GoogleMapsAPIWrapper } from 'angular2-google-maps/core/services'
 import { 
-  gmLatLng, gmLatLngBounds, 
-  sebmLatLng, sebmLatLngBounds,
+  sebmLatLng,
   sebmMarkerOptions,
   GeoJson, GeoJsonPoint, isGeoJson,
-  gmMarker, gmMarkerOptions,
+  UuidLatLng, UuidLatLngFactory,
   UuidMarker, UuidMarkerFactory
-  , gmap
 } from '../location/index';
 
-import { 
-  GoogleMap,
-  // LatLng, LatLngBounds, 
-  // Marker, MarkerOptions, 
-  MouseEvent 
-} from 'angular2-google-maps/core/services/google-maps-types'
-
-// import { GeoJson, GeoJsonPoint, isGeoJson } from "../camera-roll/location-helper";
 import {
   CameraRollWithLoc as CameraRoll,
   cameraRollPhoto, mediaType
@@ -115,12 +104,12 @@ export class MapGoogleComponent {
 
   @ViewChild('sebmGoogleMapComponent') private sebmGoogMap: any;
 
-  ready: Promise<GoogleMap>;
+  ready: Promise<google.maps.Map>;
   private _readyResolver : any;
-  private _googMap: GoogleMap;
+  private _googMap: google.maps.Map;
 
   // internal state attributes
-  private _debounce_MapBoundsChange: Subject<sebmLatLngBounds> = new Subject<sebmLatLngBounds>();
+  private _debounce_MapBoundsChange: Subject<google.maps.LatLngBounds> = new Subject<google.maps.LatLngBounds>();
   private _debounce_MapOverlayRender: Subject<SimpleChange> = new Subject<SimpleChange>();
   private _debounce_MapOverlayRenderComplete: Subject<string> = new Subject<string>();
   private _isMapChanging = false
@@ -129,7 +118,6 @@ export class MapGoogleComponent {
     private _markerClusterer : MarkerClustererService
     , private _heatmap : HeatmapService
     , private _waypoint : WaypointService
-    // , public googMaps: GoogleMapsAPIWrapper  // this getNativMap() never resolves
   ) {
     // Promise
     this.ready = new Promise<void>(
@@ -154,7 +142,7 @@ export class MapGoogleComponent {
     })
     .then( ()=>{
       this.waitForGoogleMaps()
-      .then( (map: GoogleMap)=>{
+      .then( (map: google.maps.Map)=>{
         this._markerClusterer.bind(map);
         this._heatmap.bind(map);
         this._waypoint.bind(map, this.sebmMarkers, 'map-panel');
@@ -229,16 +217,16 @@ export class MapGoogleComponent {
   /**
    * waits until google.maps.Map.onIdle() event, when map is initialized 
    * then return the SebmGoogleMap instance, google.maps.Map
-   * @return {Promise<GoogleMap>}
+   * @return {Promise<google.maps.Map>}
    */
-  waitForGoogleMaps() : Promise<GoogleMap> {
+  waitForGoogleMaps() : Promise<google.maps.Map> {
     return this.ready
       .then( ()=> {
         let googMapApiWrapper : GoogleMapsAPIWrapper = getPrivateMethod(this.sebmGoogMap, '_mapsWrapper');
-        // find native google.maps.Map() instance
-        return googMapApiWrapper.getNativeMap();
+        let map = googMapApiWrapper.getNativeMap() as any as google.maps.Map;
+        return map;
       })
-      .then( (map: GoogleMap)=> {
+      .then( (map: google.maps.Map)=> {
         return this._googMap = map;    // save ref to native map instance
       })     
   }
@@ -246,9 +234,9 @@ export class MapGoogleComponent {
   /**
    * ???: Is it meaningful to make this Observable???
    * make windows.google and map instance available
-   * @return {Observable<GoogleMap>} {google:, map:}
+   * @return {Observable<google.maps.Map>} {google:, map:}
    */
-  waitForGoogleMaps$() : Observable<GoogleMap> {
+  waitForGoogleMaps$() : Observable<google.maps.Map> {
     return Observable.fromPromise(this.waitForGoogleMaps());
   }
 
@@ -268,11 +256,11 @@ export class MapGoogleComponent {
   }
 
   setCenter(point: GeoJsonPoint) {
-    this.ready.then( (map:GoogleMap)=> {
+    this.ready.then( (map:google.maps.Map)=> {
       this.sebmGoogMap.triggerResize();  // NOTE: this changes the map.bounds
       return map;
     })
-    .then( (map:GoogleMap)=> {
+    .then( (map:google.maps.Map)=> {
       setTimeout(  ()=> {
         map.setCenter({lat:point.latitude(), lng: point.longitude()});
         console.log(`setCenter=${point}`);
@@ -291,15 +279,15 @@ export class MapGoogleComponent {
       bounds.extend(m.position);
       })
 
-    this.ready.then( (map:GoogleMap)=> {
+    this.ready.then( (map:google.maps.Map)=> {
       this.sebmGoogMap.triggerResize();  // NOTE: this changes the map.bounds
       return map;
     })
-    .then( (map:GoogleMap)=> {
+    .then( (map:google.maps.Map)=> {
       setTimeout(  ()=> {
         // console.log(`setBounds()`);
-        map.fitBounds(bounds as any as sebmLatLngBounds);
-        console.log(`bounds=${bounds}`);
+        map.fitBounds(bounds);
+        // console.log(`bounds=${bounds}`);
       }, 100);
       return map;
     })
@@ -368,7 +356,7 @@ export class MapGoogleComponent {
     this.sebmMarkers.push(sebmMarkerOptions);
   }
 
-  markerDragEnd(m: sebmMarkerOptions, $event: MouseEvent) {
+  markerDragEnd(m: sebmMarkerOptions, $event: any) {
     let {label,position} = m
     console.log(`dragEnd marker=${label}, loc=${(<sebmLatLng>position).toUrlValue()}`);
     // console.log('dragEnd', m, $event);
@@ -379,17 +367,15 @@ export class MapGoogleComponent {
   /**
    * experimental
    */
-  getMapContainsFn(bounds?: sebmLatLngBounds) : mapContainsFn {
+  getMapContainsFn(bounds?: google.maps.LatLngBounds) : mapContainsFn {
     if (!this._googMap) return function(){
       return false;
     };
-    if (!bounds) bounds = (this._googMap).getBounds();
+    if (!bounds) bounds = this._googMap.getBounds();
     // console.log(`getMapContainsFn()=${bounds}`)
     const containsFn : mapContainsFn = function(location: GeoJsonPoint) {
       if (!location) return false;
-      const {lat, lng} = location.toLatLngLiteral();
-      const latLng = new google.maps.LatLng(lat,lng);
-      return bounds.contains(latLng as any as sebmLatLng);
+      return bounds.contains(location.toLatLng());
     }
     return containsFn;
   }
@@ -437,8 +423,6 @@ export class MapGoogleComponent {
           if (!o.location) return result
           const found = _.find( markers, {uuid: o.uuid});
           const m = {
-            // lat: o.location.latitude(),
-            // lng: o.location.longitude(),
             position: <sebmLatLng>o.location.toLatLng(),
             uuid: o.uuid,
             detail: found && found.detail || `${o.filename}`,
@@ -484,7 +468,7 @@ export class MapGoogleComponent {
 
     // Hack?
     const _cache : { [key:string] : string} = {};
-    const cacheUuid = function (center: sebmLatLng | string, uuid?: string) : string {
+    const cacheUuid = function (center: google.maps.LatLng | string, uuid?: string) : string {
       const key = typeof center == "string" ? center : center.toString();
       if (center && uuid) {
         return _cache[key] = uuid;
@@ -495,14 +479,8 @@ export class MapGoogleComponent {
       let firstMarker: UuidMarker = o['markers_'][0];
       let photos = this['_markerClustererPhotos'];    // hack
       let photo = photos.find( (o:cameraRollPhoto) => o.uuid==firstMarker.uuid );
-      // TODO: groupPhotos() for clusters, and sort groups by time
-      // TODO: get cameraRollPhoto.uuid from waypoint.location
-      const clusterCenter = Object.assign({
-        lat: o.getCenter().lat(),
-        lng: o.getCenter().lng(),
-        uuid: firstMarker.uuid
-      });
-      cacheUuid(clusterCenter, photo.uuid);
+      const clusterCenter : UuidLatLng = UuidLatLngFactory(photo.uuid, o.getCenter())
+      cacheUuid(o.getCenter(), photo.uuid);
       cacheUuid(`${i}`, photo.uuid);  // also cache by waypoint index??
       if (i==0) {
         waypointsOpt['origin'] = clusterCenter
@@ -591,7 +569,7 @@ export class MapGoogleComponent {
     if (!photos) photos = this._data;
 
     // get directions for before/after locations
-    // interface markers, not gmMarkers
+    // interface markers, not google.maps.Markers
     // use clusters
 
     let waypointsOpt : directionsRequest;

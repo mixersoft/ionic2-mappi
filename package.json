@@ -23,7 +23,7 @@
     "lodash-es": "^4.16.2"
   },
   "devDependencies": {
-    "@ionic/app-scripts": "0.0.36",
+    "@ionic/app-scripts": "0.0.39",
     "@types/google-maps": "3.1.28",
     "@types/googlemaps": "^3.25.36",
     "@types/lodash": "4.14.36",

@@ -1,20 +1,18 @@
-import { EventEmitter, Injectable } from '@angular/core';
-import { GoogleMap, LatLng, LatLngBounds, Marker } from 'angular2-google-maps/core/services/google-maps-types';
+import { Injectable } from '@angular/core';
 // see: http://stackoverflow.com/questions/34376854/delegation-eventemitter-or-observable-in-angular2/35568924#35568924
 
-import { GeoJson, GeoJsonPoint, isGeoJson } from "../camera-roll/location-helper";
+import { GeoJson, } from '../location/index';
 
 @Injectable()
 export class HeatmapService {
   isVisible = false;
   instance: any;        // instanceof Heatmap
-  map: GoogleMap;
+  map: google.maps.Map;
   // selected = new EventEmitter<jmcCluster>();
-  private _points : LatLng[];
 
   constructor() { }
 
-  bind (map:GoogleMap) {
+  bind (map:google.maps.Map) {
     this.map = map;
     if (!google.maps.visualization ) new Error("Google Maps visualization library not loaded");
   }

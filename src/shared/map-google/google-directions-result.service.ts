@@ -1,11 +1,10 @@
-import { GoogleMap, LatLng, LatLngBounds, Marker } from 'angular2-google-maps/core/services/google-maps-types';
 import _ from "lodash";
-import { Observable } from 'rxjs/Observable';
-import 'rxjs/Rx';
+// import { Observable } from 'rxjs/Observable';
+// import 'rxjs/Rx';
 
 export interface poi {
   index: number
-  location: LatLng,
+  location: google.maps.LatLng,
   placeId: string,
   address: string,
   distanceM: number,
@@ -17,7 +16,7 @@ export class GoogleDirectionsResult {
   static zipPOIsByLocation(
     gdResult: GoogleDirectionsResult,
     data: any[],
-    dataLocationFn: (o:any)=>LatLng
+    dataLocationFn: (o:any)=>google.maps.LatLng
   ) : {[key:string]:any}
   {
 
@@ -66,8 +65,8 @@ export class GoogleDirectionsResult {
   getResult() : any {
     return this.data;
   }
-  getBounds(routeIndex:number = 0) : LatLngBounds {
-    return _.get(this.data, `routes[${routeIndex}].bounds`) as LatLngBounds;
+  getBounds(routeIndex:number = 0) : google.maps.LatLngBounds {
+    return _.get(this.data, `routes[${routeIndex}].bounds`) as google.maps.LatLngBounds;
   }
   getPOIs(routeIndex:number = 0, optimized: boolean = true) : poi[] {
     const route = this.data.routes[routeIndex];

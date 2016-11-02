@@ -1,30 +1,23 @@
-import { Component, EventEmitter, Inject,
-  OnInit, AfterViewInit, OnChanges, SimpleChanges,
-  Input, Output,
+import { Component, 
+  // EventEmitter, Inject,
+  // OnInit, AfterViewInit, OnChanges, SimpleChanges,
   Pipe, PipeTransform, 
   ViewChild 
 } from '@angular/core';
-// import { LatLng, LatLngBounds } from 'angular2-google-maps/core/services/google-maps-types'
-import { NavController, Platform } from 'ionic-angular';
+import { NavController } from 'ionic-angular';
 import _ from "lodash";
 
-// import { GeoJsonPoint, isGeoJson } from "../../shared/camera-roll/location-helper";
 import { 
-  gmLatLng, gmLatLngBounds, 
-  sebmLatLng, sebmLatLngBounds,
-  sebmMarkerOptions,
-  GeoJson, GeoJsonPoint, isGeoJson,
-  gmMarker, gmMarkerOptions
+  sebmMarkerOptions, GeoJsonPoint,
 } from '../../shared/location/index';
 
 import {
   CameraRollWithLoc, cameraRollPhoto, 
   mediaType, optionsFilter
 } from "../../shared/camera-roll/camera-roll.service";
-import { MapGoogleComponent,
-  mapContainsFn, mapContainsLoc, mapViz 
+import { 
+  MapGoogleComponent, mapContainsFn, mapViz,  
 } from "../../shared/map-google/index";
-import { WaypointService } from "../../shared/map-google/waypoint.service";
 import { ImageService } from "../../shared/camera-roll/image.service";
 // mocks
 import { DestinationService } from "../../mocks/mock-destinations"

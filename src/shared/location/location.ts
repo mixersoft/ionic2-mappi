@@ -1,12 +1,23 @@
 /**
- * consolodate all location resources in one file
+ * consolidate all location resources in one file
  * pick from:
- *  - @types/googlemaps: namespace google.maps
  *  - angular2-google-maps/core/services/google-maps-types.d.ts, "SebmGoogleMaps"
  *  - custom GeoJson resources
+ *  - @types/googlemaps: namespace google.maps
  */
 
 import * as sebm from 'angular2-google-maps/core/services/google-maps-types';
+
+export interface UuidLatLng extends google.maps.LatLng {
+  uuid: string;
+}
+
+export function UuidLatLngFactory(uuid: string, LatLng: google.maps.LatLng): UuidLatLng;
+export function UuidLatLngFactory(uuid: string, lat: number, lng: number): UuidLatLng;
+export function UuidLatLngFactory(uuid: string, arg1: any, lng?:number): UuidLatLng {
+  let LatLng = (arg1 instanceof google.maps.LatLng) ? arg1 : new google.maps.LatLng(arg1,lng);
+  return Object.assign(LatLng, {uuid});
+}
 
 export interface sebmLatLng extends sebm.LatLng {
   constructor(lat: number, lng: number, noWrap?: boolean);
@@ -20,16 +31,6 @@ export interface sebmLatLng extends sebm.LatLng {
 export type sebmLatLngLiteral = sebm.LatLngLiteral;
 export type sebmLatLngBounds = sebm.LatLngBounds;
 export type sebmLatLngBoundsLiteral = sebm.LatLngBoundsLiteral;
-
-
-/**
- * declare namespace google.maps {}
- */
-export import gmLatLng = google.maps.LatLng;
-export import gmLatLngLiteral = google.maps.LatLngLiteral;
-export import gmLatLngBounds = google.maps.LatLngBounds;
-export import gmLatLngBoundsLiteral = google.maps.LatLngBoundsLiteral;
-
 
 export interface GeoJson {
   type: string,
@@ -132,7 +133,7 @@ export class GeoJsonPoint extends GeoJsonBase {
  * @private
 */
 export function distanceBetweenLatLng (p1: GeoJsonPoint, p2:GeoJsonPoint) : number;
-export function distanceBetweenLatLng (p1: gmLatLng, p2:gmLatLng) : number;
+export function distanceBetweenLatLng (p1: google.maps.LatLng, p2:google.maps.LatLng) : number;
 export function distanceBetweenLatLng (p1: sebmLatLng, p2:sebmLatLng) : number;
 export function distanceBetweenLatLng (p1: any, p2:any) : number {
   if (!p1 || !p2) {
