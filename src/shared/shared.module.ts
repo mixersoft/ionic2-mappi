@@ -20,7 +20,7 @@ import { NameListService } from './name-list/index';
     // RouterModule,
     AgmCoreModule.forRoot({
       apiKey: 'AIzaSyCXh4FC9EiM_G1uaI67uEAl4nLTC1QI108'
-      ,libraries: ['visualization']
+      ,libraries: ['visualization', 'places']
     })
   ],
   declarations: [

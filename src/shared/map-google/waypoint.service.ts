@@ -170,7 +170,7 @@ export class WaypointService {
   renderRoute( routeResult: google.maps.DirectionsResult
     , dirPanelId?: string
     , getLabelForStep?:(i:number, content: string) => string 
-  ) {
+  ) : google.maps.DirectionsResult {
 
     console.warn(`renderRoute, routeResult=`, routeResult)
     const directions = routeResult;
@@ -202,7 +202,7 @@ export class WaypointService {
   updateWaypointMarkers( routeResult: google.maps.DirectionsResult
     , markers:  UuidMarker[] | sebmMarkerOptions[]
     , getLabelForStep?:(i:number, content: string) => string
-  ) {
+  ) : google.maps.DirectionsResult {
 
     if (!getLabelForStep) getLabelForStep = (i,content)=>content;
 
@@ -254,6 +254,8 @@ export class WaypointService {
       }
       return foundMarker;
     }
+
+    return routeResult;
 
   }
 

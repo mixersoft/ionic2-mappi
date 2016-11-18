@@ -4,4 +4,5 @@
 export * from './camera-roll/index';
 export * from './location/index';
 export * from './map-google/index';
+export * from './poi/index';
 export * from './name-list/index';

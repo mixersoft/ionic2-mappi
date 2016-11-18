@@ -30,7 +30,7 @@ import { ImageService, CordovaImageService } from "../shared/camera-roll/image.s
     SharedModule.forRoot(),
     AgmCoreModule.forRoot({
       apiKey: 'AIzaSyCXh4FC9EiM_G1uaI67uEAl4nLTC1QI108'
-      ,libraries: ['visualization']
+      ,libraries: ['visualization', 'places']
     }),
   ],
   bootstrap: [IonicApp],

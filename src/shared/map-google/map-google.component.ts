@@ -8,8 +8,7 @@ import 'rxjs/Rx';
 
 import { GoogleMapsAPIWrapper } from 'angular2-google-maps/core/services'
 import { 
-  sebmLatLng,
-  sebmMarkerOptions,
+  sebmLatLng, sebmMarkerOptions,
   GeoJson, GeoJsonPoint, isGeoJson,
   UuidLatLng, UuidLatLngFactory,
   UuidMarker, UuidMarkerFactory
@@ -24,6 +23,9 @@ import { WaypointService, directionsRequest } from "./waypoint.service";
 import { jmcCluster, MarkerClustererService } from "./marker-clusterer.service";
 import { HeatmapService } from "./heatmap.service";
 import { GoogleDirectionsResult, poi } from "./google-directions-result.service";
+
+// experimental
+import { PoiService , nearbyPoi, poiWaypoint } from '../poi/index';
 
 const getPrivateMethod = function (myClass:any, methodName:string) : any {
   console.info('using angular2-google-maps@0.12.0 hack to get GoogleMapsAPIWrapper');
@@ -77,6 +79,7 @@ declare var MarkerClusterer: any;
   providers:[
     {provide: Window, useValue: window},
     MarkerClustererService, HeatmapService, WaypointService
+    , PoiService
     // GoogleMapsAPIWrapper,
   ]
 })
@@ -118,6 +121,7 @@ export class MapGoogleComponent {
     private _markerClusterer : MarkerClustererService
     , private _heatmap : HeatmapService
     , private _waypoint : WaypointService
+    , private _poiSvc : PoiService
   ) {
     // Promise
     this.ready = new Promise<void>(
@@ -322,16 +326,45 @@ export class MapGoogleComponent {
   }
 
   private _lastOpenIndex: number = -1;        // for closing last InfoWindow
-  clickedMarker( data: any, index: number) {
-    data['isOpen'] = true;
+  clickedMarker( data: sebmMarkerOptions, index: number) {
+    data['$isOpen'] = true;
     try {
-      if (this._lastOpenIndex > -1) this.sebmMarkers[this._lastOpenIndex]['isOpen'] = false;
+      if (this._lastOpenIndex > -1) this.sebmMarkers[this._lastOpenIndex]['$isOpen'] = false;
     } catch (err){}
     this._lastOpenIndex = index;
     // bubble up
     const uuid = this.sebmMarkers[index].uuid;
     this.markerClick.emit( [uuid] );
     // console.log(`clicked the marker: ${data.detail}`)
+
+    this._testNearbyPlaces(data)
+    this._testNearbyPhotos(data, this._data, 100)
+    this._testPoiLookup(data)
+    
+  }
+
+  _testNearbyPlaces(m: sebmMarkerOptions) {
+    const position = m.position as any as google.maps.LatLng;
+    const handleError = err=>console.error(err);
+    PoiService.nearbyPlaces(
+      position,
+      this._googMap 
+      )
+      .subscribe(  
+        (results) => {
+          const names = results.map( o=>o.name );
+          console.info("_testNearbyPlaces()", names);
+        }
+        , handleError
+      )
+  }
+  _testNearbyPhotos(m: sebmMarkerOptions, photos: cameraRollPhoto[], distM = 25) {
+    const nearby = nearbyPoi(new GeoJsonPoint(m.position as any as google.maps.LatLng), distM, photos)
+    console.log("nearby photo uuids=", _.map(nearby, 'uuid'));
+  }
+  _testPoiLookup(m: sebmMarkerOptions) {
+    let found = this._poiSvc.get(m)
+    console.info("PoiService.get()", found)
   }
 
   mapClicked($event: any) {
@@ -421,11 +454,18 @@ export class MapGoogleComponent {
         const markers = Array.from(this.sebmMarkers);
         const sebmMarkers : sebmMarkerOptions[] = photos.slice(0,limit).reduce( (result, o, i) => {
           if (!o.location) return result
-          const found = _.find( markers, {uuid: o.uuid});
-          const m = {
+
+          const poi = this._poiSvc.set(o.location, o as cameraRollPhoto, true);
+
+          let iwContent = `${o.filename}`;
+          if (poi && poi.address) {
+            iwContent += `<br />at ${poi.address}`;
+          }
+
+          const m : sebmMarkerOptions = {
             position: <sebmLatLng>o.location.toLatLng(),
             uuid: o.uuid,
-            detail: found && found.detail || `${o.filename}`,
+            detail: iwContent,
             label: String.fromCharCode(97 + i),
             draggable: false
           }
@@ -446,11 +486,20 @@ export class MapGoogleComponent {
           .slice(0,limit)
           .reduce( (result, o, i)=>{
             if (!o.location) return result;
+
+            const poi = this._poiSvc.set(o.location, o as cameraRollPhoto, true);
+
             const [lng,lat] = o.location.coordinates;
             const markerOptions = {
               'position': new google.maps.LatLng(lat,lng),
               'title': o.filename,
             }
+
+            if (poi && poi.address) {
+              debugger;
+              markerOptions.title += `<br />at ${poi.address}`;
+            }
+
             const marker = UuidMarkerFactory(o.uuid, markerOptions);
             result.push( marker );
             return result;
@@ -503,12 +552,12 @@ export class MapGoogleComponent {
   getRouteOptsFromPhotos(photos: cameraRollPhoto[]) : directionsRequest {
     if (!photos.length) return undefined;
     let waypointsOpt : any = {};
-    let toLatLng : (o:cameraRollPhoto | sebmMarkerOptions)=>{lat:number, lng:number};
+    let toLatLng : (o:cameraRollPhoto | sebmMarkerOptions)=>google.maps.LatLng;
     _.each( photos, (o,i,l) => {
       toLatLng = isGeoJson(o.location) ?
-        p => (p as cameraRollPhoto).location.toLatLngLiteral() :
+        p => (p as cameraRollPhoto).location.toLatLng() :
         // p => _.pick(p, ['lat','lng']) as {lat:number, lng:number};
-        p => (<sebmLatLng>(<sebmMarkerOptions>p).position).toJSON()
+        p => (<sebmMarkerOptions>p).position as any as google.maps.LatLng
       if (i==0) {
         // waypointsOpt['origin'] = _.pick(m, ['lat','lng']);
         waypointsOpt['origin'] = Object.assign(toLatLng(o), {uuid:o.uuid})
@@ -542,7 +591,6 @@ export class MapGoogleComponent {
     // console.log(gdResult.getPOIs());
     WaypointService.displayRoute( gdResult.getResult(), 'map-panel' );
     
-
     let byLatLng = GoogleDirectionsResult.zipPOIsByLocation(
       gdResult,
       clusters,
@@ -665,8 +713,21 @@ export class MapGoogleComponent {
     .then(
       routeResult=>{
         console.info(`BEFORE updateWaypointMarkers(), routeMarkers=`, routeMarkers)
-        this._waypoint.updateWaypointMarkers(routeResult, routeMarkers, getInfoForMarker)
+        // push location/placeId attr to PoiService
+        // update markers from PoiService
+        return this._waypoint.updateWaypointMarkers(routeResult, routeMarkers, getInfoForMarker)
     })
+    .then(
+      routeResult=>{
+        let gdResult = new GoogleDirectionsResult(routeResult);
+        let pois : poiWaypoint[] = GoogleDirectionsResult.getPois(gdResult);
+        // cache waypoints to PoiService
+        pois.forEach( p=>{
+          this._poiSvc.set(p.location, p, true);
+        })
+        console.info("Pois", pois);
+      }
+    )
     return true;
   }
 }

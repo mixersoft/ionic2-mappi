@@ -8,6 +8,8 @@
 
 import * as sebm from 'angular2-google-maps/core/services/google-maps-types';
 
+declare var google:any;
+
 export interface UuidLatLng extends google.maps.LatLng {
   uuid: string;
 }
@@ -34,7 +36,7 @@ export type sebmLatLngBoundsLiteral = sebm.LatLngBoundsLiteral;
 
 export interface GeoJson {
   type: string,
-  coordinates: [number,number]
+  coordinates: [number,number]  // [lng,lat]
 }
 
 export function isGeoJson ( obj : any) : obj is GeoJson {
@@ -60,32 +62,6 @@ export abstract class GeoJsonBase {
   latitude() : number {
     return this.coordinates[1];
   }
-  // google.maps.LatLngLiteral
-  toLatLngLiteral() : google.maps.LatLngLiteral {
-    return {
-      lat: this.coordinates[1],
-      lng: this.coordinates[0]
-    }
-  }
-  toLatLng() : google.maps.LatLng {
-    const [lng, lat] = this.coordinates;
-    return new google.maps.LatLng(lat, lng)
-  }
-
-  toLatLngString(precision: number = 6) : string {
-   return this.toLatLng().toUrlValue(precision) 
-  }
-
-  /**
-   * return [lon,lat] as decimals rounded to the 'precision' digits
-   *    - google maps only uses 6 significant digits
-   * @param  {int} precision [description]
-   * @return {[number,number]}  [lon,lat]
-   */
-  getLonLat(precision: number = 6) : [number,number] {
-    let rounded =  this.coordinates.map( v => this._mathRound(v, precision) )
-    return rounded as [number,number]
-  }
 }
 
 export class GeoJsonPoint extends GeoJsonBase {
@@ -95,32 +71,87 @@ export class GeoJsonPoint extends GeoJsonBase {
     return new GeoJsonPoint([longitude, latitude]);
   }
 
-  /**
-   * overloading constructors or using union types
-   */
-  // constructor ( obj : GeoJson)
-  // constructor ( obj : [number, number])
-  // constructor ( obj : any)
-  constructor( obj: GeoJson | [number, number])  {
+
+  constructor ( obj : GeoJson);
+  constructor ( obj : google.maps.LatLng);
+  constructor ( obj : [number, number]);
+  constructor ( obj : any = {}) {
     if ( obj instanceof Array ) {
       let [longitude, latitude] = obj;
       super("Point", [longitude, latitude]);
       return
-    } else {
-      // must be type GeoJson
-      let {type, coordinates} = obj;
+    }
+    let {type, coordinates} = obj;
+    if (type && coordinates) {
       if (type != 'Point') throw new Error("Error, expecting type=Point");
       if (type && coordinates) {
           super(type, coordinates);
-          return
       }
+      return
+    }
+    if (google && obj instanceof google.maps.LatLng) {
+      type = "Point";
+      coordinates = [obj.lng(), obj.lat()]
+      super(type, coordinates);
+      return
+    }
+    let {lng, lat} = obj;
+    if (lng && lat) {
+      super("Point", [lng, lat]);
+      return;
+    }
+    throw new Error("Error, expecting something that describes a Point");
+  }
+
+
+
+  /**
+   * return "lon,lat" as decimals rounded to the 'precision' digits
+   * flipped version of google.maps.LatLng.toLatLngString(), does NOT use google.maps.LatLng
+   *    - google maps only uses 6 significant digits
+   * @param  {int}      precision 
+   * @return {string}   "lon,lat"
+   */
+  toLonLatString(precision: number = 6) : string {
+    let rounded =  this.coordinates.map( v => this._mathRound(v, precision) )
+    return rounded.join(",");
+  }
+
+  toJson() : {lat: number, lng: number} {  // same as google.maps.LatLngLiteral
+    return {
+      lat: this.coordinates[1],
+      lng: this.coordinates[0]
     }
   }
+
+
+  /**
+   * NOTE: these methods depend on google.maps API
+   *  loaded by `angular2-google-maps`
+   */
+  toLatLngLiteral() : google.maps.LatLngLiteral {
+    return this.toJson();
+  }
+  
+  toLatLng() : google.maps.LatLng {
+    const [lng, lat] = this.coordinates;
+    return new google.maps.LatLng(lat, lng)
+  }
+
+  toLatLngString(precision: number = 6) : string {
+   return this.toLatLng().toUrlValue(precision) 
+  }
+
+  equals(other: GeoJsonPoint | google.maps.LatLng, precision?: number) : boolean {
+    if (isGeoJson(other)) other = other.toLatLng()
+    if (precision) {
+      return this.toLatLngString(precision) == other.toUrlValue(precision);
+    }
+    return this.toLatLng().equals(other);
+  }
+
 }
 
-
-
-// TODO:  make Injectable
 
 /**
  * from package: js-marker-clusterer

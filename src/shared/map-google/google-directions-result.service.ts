@@ -1,4 +1,6 @@
 import _ from "lodash";
+
+import {PoiService, poiWaypoint} from '../poi/index';
 // import { Observable } from 'rxjs/Observable';
 // import 'rxjs/Rx';
 
@@ -12,6 +14,10 @@ export interface poi {
 }
 
 export class GoogleDirectionsResult {
+
+  static getPois(gdResult: GoogleDirectionsResult) : poiWaypoint[] {
+    return PoiService.importDirectionsResult(gdResult.getResult())
+  }
 
   static zipPOIsByLocation(
     gdResult: GoogleDirectionsResult,
