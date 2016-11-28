@@ -4,33 +4,37 @@
   "homepage": "http://ionicframework.com/",
   "private": true,
   "scripts": {
-    "build": "ionic-app-scripts build --dev --debug",
-    "watch": "ionic-app-scripts watch",
-    "serve:before": "watch",
-    "emulate:before": "build",
-    "deploy:before": "build",
-    "build:before": "build",
-    "run:before": "build"
+    "ionic:build": "ionic-app-scripts build --dev --debug",
+    "ionic:serve": "ionic-app-scripts serve"
   },
   "dependencies": {
-    "@ionic/storage": "^1.0.3",
-    "angular2-google-maps": "^0.15.0",
-    "ionic-angular": "^2.0.0-rc.0",
-    "ionic-native": "^2.0.3",
-    "ionicons": "^3.0.0",
+    "@angular/common": "2.1.1",
+    "@angular/compiler": "2.1.1",
+    "@angular/compiler-cli": "2.1.1",
+    "@angular/core": "2.1.1",
+    "@angular/forms": "2.1.1",
+    "@angular/http": "2.1.1",
+    "@angular/platform-browser": "2.1.1",
+    "@angular/platform-browser-dynamic": "2.1.1",
+    "@angular/platform-server": "2.1.1",
+    "@ionic/storage": "1.1.6",
+    "ionic-angular": "^2.0.0-rc.3",
+    "ionic-native": "2.2.3",
+    "ionicons": "3.0.0",
     "js-marker-clusterer": "^1.0.0",
     "lodash": "^4.16.2",
-    "lodash-es": "^4.16.2"
+    "lodash-es": "^4.16.2",
+    "rxjs": "5.0.0-beta.12",
+    "zone.js": "0.6.21"
   },
   "devDependencies": {
-    "@ionic/app-scripts": "0.0.39",
+    "@ionic/app-scripts": "0.0.46",
     "@types/google-maps": "3.1.28",
     "@types/googlemaps": "^3.25.36",
     "@types/lodash": "4.14.36",
     "typescript": "^2.0.3"
   },
   "cordovaPlugins": [
-    "https://github.com/mixersoft/cordova-plugin-camera-roll-location.git",
     "cordova-plugin-file",
     "cordova-plugin-device",
     "cordova-plugin-console",
@@ -40,7 +44,7 @@
     "ionic-plugin-keyboard"
   ],
   "config": {
-    "ionic_rollup": "./scripts/rollup.config.js"
+    "xxxionic_rollup": "./scripts/rollup.config.js"
   },
   "cordovaPlatforms": [
     "ios",

@@ -1,9 +1,8 @@
 # ionic2-playground
 
 ```bash
-ionic plugin remove com-snaphappi-plugin-camera-roll-location;
-# ionic plugin add /dev.snaphappi.com/_xcode/CameraRollLocation  --save
-ionic plugin add https://github.com/mixersoft/cordova-plugin-camera-roll-location.git --save
+ionic plugin add cordova-plugin-add-swift-support --save
+ionic plugin add cordova-plugin-camera-roll-location --save
 ```
 
 # mappi
