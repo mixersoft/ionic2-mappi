@@ -610,15 +610,18 @@ export class MapGoogleComponent {
     console.log(byLatLng);
   }
 
+  toggleRoute(photos?: cameraRollPhoto[]){
+    if (this._waypoint.isVisible()){
+      this._waypoint.clearRoutes();
+      return false
+    } else
+      this.showRoute(photos);
+  }
+
   /**
    * @return boolean, isRouteVisible
    */
   showRoute(photos?: cameraRollPhoto[]) : boolean {
-    if (this._waypoint.isVisible()) {
-      // # toggle route visibilty
-      this._waypoint.clearRoutes();
-      return false;
-    }
 
     if (!photos) photos = this._data;
 
@@ -721,6 +724,10 @@ export class MapGoogleComponent {
         console.info(`BEFORE updateWaypointMarkers(), routeMarkers=`, routeMarkers)
         // push location/placeId attr to PoiService
         // update markers from PoiService
+        if (_.isEqual(photos, this._data) == false) {
+          // this is a partial route
+          return routeResult;
+        }
         return this._waypoint.updateWaypointMarkers(routeResult, routeMarkers, getInfoForMarker)
     })
     .then(

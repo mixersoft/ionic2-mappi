@@ -8,7 +8,7 @@ import { NavController } from 'ionic-angular';
 import _ from "lodash";
 
 import { 
-  sebmMarkerOptions, GeoJsonPoint,
+  sebmMarkerOptions, GeoJsonPoint, distanceBetweenLatLng
 } from '../../shared/location/index';
 
 import {
@@ -16,11 +16,14 @@ import {
   mediaType, optionsFilter
 } from "../../shared/camera-roll/camera-roll.service";
 import { 
-  MapGoogleComponent, mapContainsFn, mapViz,  
+  MapGoogleComponent, mapContainsFn, mapViz
 } from "../../shared/map-google/index";
 import { ImageService } from "../../shared/camera-roll/image.service";
 // mocks
 import { DestinationService } from "../../mocks/mock-destinations"
+
+// experimental
+import { PoiService , nearbyPoi, poiWaypoint } from '../../shared/poi/index';
 
 const DEFAULT = {
   zoom: 14
@@ -149,6 +152,66 @@ export class MappiPage {
       : data.slice(0,PREVIEW_COUNT);
     this.selecteds = _.filter(data, {mediaType: mediaType.Image}).slice(0,PREVIEW_COUNT);
     // console.warn(`markerClick, selected=${_.map(this.selecteds, 'filename')}`);
+    const nextStops = this._testPathToNext( uuids );
+    // console.info('nextStops', nextStops);
+    if ('animate'){
+      // hide markers
+      this._mapCtrl.sebmMarkers = [];
+      this._testAnimateNextStops(nextStops);
+    } else {
+      // showRoute for first 10 markers
+      this.showRoute([ nextStops.from, nextStops.to[0] ]);
+    }
+  }
+
+  _testAnimateNextStops(nextStops) {
+    const nextDest :cameraRollPhoto = nextStops.to[0];
+    // BUG: showRoute toggles visiblity of WaypointService
+    this.showRoute([ nextStops.from, nextDest ]);
+    // console.log("nextStop=>", nextStops.from.uuid.slice(0,36), nextDest.uuid.slice(0,36));
+    nextStops = this._testPathToNext( [nextDest.uuid] );
+    if (nextStops.to.length) {
+      const done = setTimeout( ()=>{
+          this._testAnimateNextStops(nextStops);
+      }, 2000)
+    }
+  }
+
+  _testPathToNext( uuids: string[] ) : any {
+    let matchPhotos = _photos.filter( o => _.includes(uuids, o.uuid)  );
+    matchPhotos = _.sortBy(matchPhotos, 'localTime');
+    const allPhotos = _.sortBy(Array.from(_photos), 'localTime');
+
+    let match: cameraRollPhoto = matchPhotos.shift();
+    const result = {
+      from: match,
+      to: []
+    }
+
+    let found : cameraRollPhoto;
+    result.to = _.reduce( allPhotos, (memo, o)=>{
+      if (found){
+        if ( match && o.uuid == match.uuid ) {
+          match = matchPhotos.shift();
+        } else {
+          const dist = distanceBetweenLatLng(found.location, o.location);
+          if (dist < 10) {
+            console.warn('SKIP: distance between points too close, dist=', dist)
+          } else {
+            memo.push(o);
+            found = null;
+          }
+        }
+      } else {
+        // match = matchPhotos.shift();
+        if (match && o.uuid == match.uuid) {
+          found = o;
+          match = matchPhotos.shift();
+        }   
+      }
+      return memo
+    }, [])
+    return result;
   }
 
   /**
@@ -249,6 +312,10 @@ export class MappiPage {
   toggleClusterer() {
     this.viz = (this.viz == mapViz.ClusterMap) ? mapViz.None : mapViz.ClusterMap;
     return
+  }
+
+  toggleRoute(){
+    let isRouteShown = this._mapCtrl.toggleRoute();
   }
 
 
