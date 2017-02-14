@@ -88,6 +88,7 @@ export class MapGoogleComponent {
 
   @Input() center: GeoJsonPoint;
   @Input() zoom: number;
+  @Output() zoomChange: EventEmitter<number> = new EventEmitter<number>();
   @Input() sebmMarkers: sebmMarkerOptions[];
   @Output() markersChange: EventEmitter<sebmMarkerOptions[]> = new EventEmitter<sebmMarkerOptions[]>();
   // getMapContainsFn() : (o:any)=>boolean
@@ -316,6 +317,11 @@ export class MapGoogleComponent {
    */
   onChanged(label: string, value:any){    
     switch (label) {
+      case 'zoomChange': 
+        this.zoom = value;
+        this.zoomChange.emit(this.zoom);
+        console.log(`${label}=${value}, zoom=${this.zoom}`)
+        break;
       case 'centerChange': value = [value.lat, value.lng]; break;
       case 'boundsChange':
         // bubble up
