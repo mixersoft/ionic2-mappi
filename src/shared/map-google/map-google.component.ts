@@ -457,7 +457,6 @@ export class MapGoogleComponent {
     switch (currentViz) {
       case mapViz.Markers:
         limit = 26;
-        const markers = Array.from(this.sebmMarkers);
         const sebmMarkers : sebmMarkerOptions[] = photos.slice(0,limit).reduce( (result, o, i) => {
           if (!o.location) return result
 
