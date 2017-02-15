@@ -1,5 +1,8 @@
 import { NgModule } from '@angular/core';
-import { AgmCoreModule } from 'angular2-google-maps/core';
+import { AgmCoreModule,
+   MapsAPILoader, 
+   LazyMapsAPILoader, LAZY_MAPS_API_CONFIG 
+} from 'angular2-google-maps/core';
 import { IonicApp, IonicModule, Platform } from 'ionic-angular';
 
 
@@ -63,6 +66,14 @@ import { ImageService, CordovaImageService } from "../shared/camera-roll/image.s
             return new MockCameraRollWithLoc()
         }
     }
+    , {
+      provide: LAZY_MAPS_API_CONFIG
+      , useValue: {
+        // apiKey: "",
+        libraries: ['visualization', 'places']
+      }
+    }
+    , LazyMapsAPILoader
   ]
 })
 export class AppModule {}
